@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# mypy
+.mypy_cache/
+
+# ruff
+.ruff_cache/
+
+# Models (distributed via download-on-first-use, too large for git)
+src/llm_shield/data/models/*.onnx
+src/llm_shield/data/models/*.bin
+src/llm_shield/data/models/*.npy
+src/llm_shield/data/models/*.json
+!src/llm_shield/data/models/.gitkeep
+
+# Script outputs (generated, not tracked)
+scripts/*.json
+
+# Environment
+.env
+.env.local

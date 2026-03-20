@@ -1,0 +1,30 @@
+site_name: llm-shield
+site_description: Open-core LLM prompt security analysis
+site_url: https://llm-shield.dev
+repo_url: https://github.com/llm-shield/llm-shield
+repo_name: llm-shield/llm-shield
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: deep purple
+      accent: amber
+  features:
+    - content.code.copy
+    - navigation.sections
+
+nav:
+  - Home: index.md
+  - Quick Start: quickstart.md
+  - Configuration: configuration.md
+  - Analysis Layers: layers.md
+  - CLI Reference: cli.md
+  - MCP Server: mcp.md
+  - Benchmark: benchmark.md
+
+markdown_extensions:
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - admonition
+  - tables

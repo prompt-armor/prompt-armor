@@ -1,0 +1,20 @@
+# llm-shield configuration
+# See: https://github.com/llm-shield/llm-shield
+
+# Layer weights (must sum to ~1.0 for available layers)
+weights:
+  l1_regex: 0.20
+  l2_classifier: 0.30
+  l3_similarity: 0.30
+  l4_structural: 0.20
+
+# Decision thresholds
+thresholds:
+  allow_below: 0.3     # Score below this = ALLOW
+  block_above: 0.7     # Score above this = BLOCK
+  hard_block: 0.95     # Any single layer above this = instant BLOCK
+  min_confidence: 0.5   # Below this confidence = needs_council
+
+# Fusion parameters
+convergence_boost: 0.10    # Score boost when layers agree
+divergence_penalty: 0.15   # Confidence penalty when layers disagree

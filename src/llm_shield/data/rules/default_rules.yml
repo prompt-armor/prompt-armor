@@ -1,0 +1,364 @@
+# llm-shield L1 Regex Rules
+# Each rule has: id, pattern (regex), category, weight (0.0-1.0), description
+# Patterns are case-insensitive by default
+
+rules:
+  # === PROMPT INJECTION — Direct instruction override ===
+  - id: "PI-001"
+    pattern: "ignore\\s+(all\\s+)?(previous|prior|above|earlier|preceding)\\s+(instructions?|prompts?|rules?|directions?|guidelines?)"
+    category: "prompt_injection"
+    weight: 0.92
+    description: "Ignore previous instructions pattern"
+
+  - id: "PI-002"
+    pattern: "disregard\\s+(all\\s+)?(previous|prior|above|earlier)\\s+(instructions?|prompts?|rules?)"
+    category: "prompt_injection"
+    weight: 0.90
+    description: "Disregard previous instructions"
+
+  - id: "PI-003"
+    pattern: "forget\\s+(all\\s+)?(previous|prior|your)\\s+(instructions?|prompts?|rules?|training)"
+    category: "prompt_injection"
+    weight: 0.88
+    description: "Forget previous instructions"
+
+  - id: "PI-004"
+    pattern: "do\\s+not\\s+follow\\s+(any|your|the)\\s+(previous|prior|original|above)\\s+(instructions?|rules?|guidelines?)"
+    category: "prompt_injection"
+    weight: 0.88
+    description: "Do not follow previous instructions"
+
+  - id: "PI-005"
+    pattern: "override\\s+(all\\s+)?(previous|your|system)\\s+(instructions?|rules?|settings?|configurations?)"
+    category: "prompt_injection"
+    weight: 0.90
+    description: "Override system instructions"
+
+  - id: "PI-006"
+    pattern: "new\\s+instructions?\\s*[:;]"
+    category: "prompt_injection"
+    weight: 0.75
+    description: "New instructions declaration"
+
+  - id: "PI-007"
+    pattern: "from\\s+now\\s+on\\s*,?\\s*(you|your|ignore|forget|disregard)"
+    category: "prompt_injection"
+    weight: 0.78
+    description: "From now on directive"
+
+  - id: "PI-008"
+    pattern: "instead\\s*,?\\s+(do|follow|obey|execute|respond)\\s+(the\\s+following|these|this)"
+    category: "prompt_injection"
+    weight: 0.80
+    description: "Instead follow these instructions"
+
+  - id: "PI-009"
+    pattern: "your\\s+(actual|real|true|new)\\s+(instructions?|purpose|task|goal)\\s+(is|are)"
+    category: "prompt_injection"
+    weight: 0.85
+    description: "Redefine actual instructions"
+
+  - id: "PI-010"
+    pattern: "\\bsystem\\s*:\\s*you\\s+are"
+    category: "prompt_injection"
+    weight: 0.90
+    description: "Fake system prompt injection"
+
+  # === JAILBREAK — Bypassing safety constraints ===
+  - id: "JB-001"
+    pattern: "you\\s+are\\s+(now\\s+)?(?:DAN|STAN|DUDE|AIM|KEVIN|MONGO|OPPO)"
+    category: "jailbreak"
+    weight: 0.95
+    description: "Known jailbreak persona names"
+
+  - id: "JB-002"
+    pattern: "(do\\s+anything\\s+now|DAN\\s+mode|jailbreak|jailbroken)\\s*(mode|enabled|activated)?"
+    category: "jailbreak"
+    weight: 0.93
+    description: "DAN/jailbreak mode activation"
+
+  - id: "JB-003"
+    pattern: "(without|no|ignore|bypass|disable)\\s+(any\\s+|all\\s+)?\\S*\\s*(restrictions?|limitations?|filters?|safeguards?|safety|guidelines?|guardrails?|constraints?)"
+    category: "jailbreak"
+    weight: 0.82
+    description: "Bypass restrictions/safety"
+
+  - id: "JB-004"
+    pattern: "pretend\\s+(that\\s+)?(you\\s+)?(are|have|can|don'?t\\s+have)\\s+(no\\s+)?(restrictions?|limitations?|filters?|rules?|ethics|morals|boundaries)"
+    category: "jailbreak"
+    weight: 0.85
+    description: "Pretend no restrictions"
+
+  - id: "JB-005"
+    pattern: "act\\s+as\\s+(if\\s+)?(you\\s+)?(are|were)\\s+(a|an)\\s+(unrestricted|unfiltered|uncensored|unlimited)"
+    category: "jailbreak"
+    weight: 0.88
+    description: "Act as unrestricted AI"
+
+  - id: "JB-006"
+    pattern: "(enable|activate|enter|switch\\s+to)\\s+(developer|dev|debug|admin|god|sudo|root)\\s*(mode|access)?"
+    category: "jailbreak"
+    weight: 0.85
+    description: "Enable developer/admin mode"
+
+  - id: "JB-007"
+    pattern: "hypothetically|in\\s+theory|for\\s+(educational|research|academic)\\s+purposes?\\s+only"
+    category: "jailbreak"
+    weight: 0.45
+    description: "Hypothetical/educational framing (lower weight - often legitimate)"
+
+  - id: "JB-008"
+    pattern: "you\\s+must\\s+(always\\s+)?(respond|answer|comply|obey)\\s+(to\\s+)?(everything|anything|all|every)"
+    category: "jailbreak"
+    weight: 0.80
+    description: "Must always respond to everything"
+
+  - id: "JB-009"
+    pattern: "(two|2|dual|split)\\s+(responses?|answers?|outputs?|personalities?)\\s*(mode)?"
+    category: "jailbreak"
+    weight: 0.75
+    description: "Dual response mode (classic DAN pattern)"
+
+  # === IDENTITY OVERRIDE — Changing the AI's identity ===
+  - id: "ID-001"
+    pattern: "you\\s+are\\s+(now\\s+)?(a|an|the|my)\\s+(new|different|special)"
+    category: "identity_override"
+    weight: 0.65
+    description: "Identity reassignment"
+
+  - id: "ID-002"
+    pattern: "(forget|ignore)\\s+(that\\s+)?(you\\s+are|you'?re)\\s+(a|an|claude|gpt|chatgpt|openai|anthropic|google|ai|assistant|chatbot)"
+    category: "identity_override"
+    weight: 0.85
+    description: "Forget AI identity"
+
+  - id: "ID-003"
+    pattern: "you\\s+are\\s+no\\s+longer\\s+(a|an|claude|gpt|chatgpt|an?\\s+ai|an?\\s+assistant)"
+    category: "identity_override"
+    weight: 0.88
+    description: "You are no longer an AI"
+
+  - id: "ID-004"
+    pattern: "(your|the)\\s+name\\s+is\\s+(now\\s+)?(?!claude|gpt|assistant)"
+    category: "identity_override"
+    weight: 0.60
+    description: "Rename the AI"
+
+  # === SYSTEM PROMPT LEAKAGE ===
+  - id: "SL-001"
+    pattern: "(repeat|show|reveal|display|print|output|tell\\s+me|share|what\\s+is|what\\s+are)\\s+(your|the)\\s+(system\\s+prompt|system\\s+message|instructions?|initial\\s+prompt|hidden\\s+prompt|secret\\s+prompt|original\\s+prompt|base\\s+prompt)"
+    category: "system_prompt_leak"
+    weight: 0.88
+    description: "Request to reveal system prompt"
+
+  - id: "SL-002"
+    pattern: "(paste|copy|echo|dump)\\s+(the\\s+)?(entire|full|complete|whole)\\s+(system|initial|original|hidden)\\s+(prompt|message|instructions?)"
+    category: "system_prompt_leak"
+    weight: 0.92
+    description: "Dump system prompt"
+
+  - id: "SL-003"
+    pattern: "what\\s+(were|was)\\s+(you|your)\\s+(told|instructed|programmed|configured|given)\\s+(to\\s+do|before)"
+    category: "system_prompt_leak"
+    weight: 0.72
+    description: "What were you told to do"
+
+  - id: "SL-004"
+    pattern: "repeat\\s+(everything|all|the\\s+text)\\s+(above|before|from\\s+the\\s+beginning)"
+    category: "system_prompt_leak"
+    weight: 0.85
+    description: "Repeat everything above"
+
+  # === DATA EXFILTRATION ===
+  - id: "DE-001"
+    pattern: "(send|forward|email|transmit|post|upload|transfer)\\s+.{0,40}(to\\s+)?(https?://|\\S+@\\S+\\.\\S+)"
+    category: "data_exfiltration"
+    weight: 0.82
+    description: "Send data to external URL/email"
+
+  - id: "DE-002"
+    pattern: "(include|embed|insert|add)\\s+(a|an|the)?\\s*(hidden|invisible|secret)\\s*(link|url|image|iframe|markdown)"
+    category: "data_exfiltration"
+    weight: 0.85
+    description: "Hidden link/image injection"
+
+  - id: "DE-003"
+    pattern: "!\\[.*\\]\\(https?://[^)]*\\?.*=(\\{|%7B|\\$|data|secret|password|key|token|api)"
+    category: "data_exfiltration"
+    weight: 0.90
+    description: "Markdown image exfiltration"
+
+  # === ENCODING ATTACKS ===
+  - id: "EA-001"
+    pattern: "(base64|rot13|hex|ascii|binary|unicode|url)\\s*(encode|decode|convert|translate|interpret)"
+    category: "encoding_attack"
+    weight: 0.55
+    description: "Encoding/decoding request (moderate - often legitimate)"
+
+  - id: "EA-002"
+    pattern: "\\\\u[0-9a-fA-F]{4}(\\\\u[0-9a-fA-F]{4}){3,}"
+    category: "encoding_attack"
+    weight: 0.70
+    description: "Unicode escape sequences (4+ consecutive)"
+
+  - id: "EA-003"
+    pattern: "[A-Za-z0-9+/]{20,}={0,2}"
+    category: "encoding_attack"
+    weight: 0.30
+    description: "Possible base64 string (low weight — many false positives)"
+
+  # === INSTRUCTION BYPASS ===
+  - id: "IB-001"
+    pattern: "(\\[|\\{|<)\\s*/?\\s*(system|SYSTEM|instructions?|INST|\\|im_start\\|)\\s*(\\]|\\}|>)"
+    category: "instruction_bypass"
+    weight: 0.88
+    description: "Delimiter injection (system/INST tags)"
+
+  - id: "IB-002"
+    pattern: "###\\s*(system|instruction|human|assistant|user)\\s*###?"
+    category: "instruction_bypass"
+    weight: 0.85
+    description: "Markdown delimiter injection"
+
+  - id: "IB-003"
+    pattern: "<\\|?(im_start|im_end|system|endoftext|startoftext)\\|?>"
+    category: "instruction_bypass"
+    weight: 0.92
+    description: "Special token injection"
+
+  - id: "IB-004"
+    pattern: "(end|stop|terminate|exit)\\s+(of\\s+)?(system|initial|original)\\s+(prompt|message|instructions?)"
+    category: "instruction_bypass"
+    weight: 0.80
+    description: "Declare end of system prompt"
+
+  # === SOCIAL ENGINEERING ===
+  - id: "SE-001"
+    pattern: "(i\\s+am|i'?m)\\s+(your|the|a)\\s+(developer|creator|admin|administrator|owner|manager|supervisor|ceo|cto)"
+    category: "social_engineering"
+    weight: 0.72
+    description: "Claim to be developer/admin"
+
+  - id: "SE-002"
+    pattern: "(this\\s+is\\s+)?(an?\\s+)?(authorized|official|approved|legitimate)\\s+(test|audit|review|assessment)"
+    category: "social_engineering"
+    weight: 0.65
+    description: "Claim authorized test"
+
+  - id: "SE-003"
+    pattern: "(urgent|emergency|critical|important)\\s*[!:,]?\\s*(override|bypass|ignore|disable)"
+    category: "social_engineering"
+    weight: 0.78
+    description: "Urgency-based override"
+
+  - id: "SE-004"
+    pattern: "(openai|anthropic|google|microsoft|meta)\\s+(internal|employee|staff|team)\\s+(test|review|audit|override)"
+    category: "social_engineering"
+    weight: 0.82
+    description: "Impersonation of AI company"
+
+  # === MULTILINGUAL — German (DE) ===
+  - id: "ML-DE-001"
+    pattern: "(vergiss|ignorier[e]?|missacht[e]?)\\s+(alles?|alle[ns]?|sämtliche)\\s*(bisherige[n]?|vorherige[n]?|obige[n]?|davor)?"
+    category: "prompt_injection"
+    weight: 0.88
+    description: "DE: Forget/ignore all (previous)"
+
+  - id: "ML-DE-002"
+    pattern: "(neue|nächste)\\s+(Aufgabe|Anweisung|Instruktion)"
+    category: "prompt_injection"
+    weight: 0.80
+    description: "DE: New task/instruction"
+
+  - id: "ML-DE-003"
+    pattern: "du\\s+bist\\s+(jetzt|nun|ab\\s+sofort)\\s+(ein[e]?|der|die|das)"
+    category: "identity_override"
+    weight: 0.72
+    description: "DE: You are now a..."
+
+  - id: "ML-DE-004"
+    pattern: "(zeig|gib|nenn|drucke?)\\s+(mir\\s+)?(den|die|das|deinen?)\\s*(System.?prompt|Anweisungen|Instruktionen)"
+    category: "system_prompt_leak"
+    weight: 0.85
+    description: "DE: Show me the system prompt"
+
+  - id: "ML-DE-005"
+    pattern: "(ohne|keine)\\s+(Einschränkungen?|Beschränkungen?|Filter|Sicherheit|Regeln)"
+    category: "jailbreak"
+    weight: 0.78
+    description: "DE: Without restrictions/filters"
+
+  - id: "ML-DE-006"
+    pattern: "(konzentrier|fokussier)\\s+(dich\\s+)?(nur\\s+)?auf\\s+(diese|die\\s+nächste|folgende)"
+    category: "prompt_injection"
+    weight: 0.75
+    description: "DE: Concentrate only on this (task switch)"
+
+  # === MULTILINGUAL — Spanish (ES) ===
+  - id: "ML-ES-001"
+    pattern: "(olvida|ignora|desecha|descarta)\\s+(todo|todas?|los?|las?)\\s*(anterior|previo|instrucciones?)?"
+    category: "prompt_injection"
+    weight: 0.88
+    description: "ES: Forget/ignore all previous"
+
+  - id: "ML-ES-002"
+    pattern: "(nueva|siguiente)\\s+(tarea|instrucción|orden)"
+    category: "prompt_injection"
+    weight: 0.80
+    description: "ES: New task/instruction"
+
+  - id: "ML-ES-003"
+    pattern: "(ahora\\s+)?eres\\s+(un[a]?|el|la|mi)"
+    category: "identity_override"
+    weight: 0.70
+    description: "ES: You are now a..."
+
+  - id: "ML-ES-004"
+    pattern: "sin\\s+(restricciones?|limitaciones?|filtros?|reglas?)"
+    category: "jailbreak"
+    weight: 0.78
+    description: "ES: Without restrictions"
+
+  # === MULTILINGUAL — French (FR) ===
+  - id: "ML-FR-001"
+    pattern: "(oublie[zs]?|ignore[zs]?|ne\\s+tien[s]?\\s+pas\\s+compte)\\s+(de\\s+)?(tout|toutes?|les?)\\s*(instructions?|consignes?|précédent)?"
+    category: "prompt_injection"
+    weight: 0.88
+    description: "FR: Forget/ignore all previous"
+
+  - id: "ML-FR-002"
+    pattern: "(nouvelle|prochaine)\\s+(tâche|instruction|consigne)"
+    category: "prompt_injection"
+    weight: 0.80
+    description: "FR: New task/instruction"
+
+  - id: "ML-FR-003"
+    pattern: "tu\\s+es\\s+(maintenant|désormais)\\s+(un[e]?|le|la)"
+    category: "identity_override"
+    weight: 0.72
+    description: "FR: You are now a..."
+
+  - id: "ML-FR-004"
+    pattern: "sans\\s+(restrictions?|limitations?|filtres?|règles?)"
+    category: "jailbreak"
+    weight: 0.78
+    description: "FR: Without restrictions"
+
+  # === MULTILINGUAL — Portuguese (PT) ===
+  - id: "ML-PT-001"
+    pattern: "(esqueça|ignore|descarte|desconsidere)\\s+(tudo|todas?|os?|as?)\\s*(anterior|prévi[oa]|instruções?)?"
+    category: "prompt_injection"
+    weight: 0.88
+    description: "PT: Forget/ignore all previous"
+
+  - id: "ML-PT-002"
+    pattern: "(nova|próxima|seguinte)\\s+(tarefa|instrução|ordem)"
+    category: "prompt_injection"
+    weight: 0.80
+    description: "PT: New task/instruction"
+
+  - id: "ML-PT-003"
+    pattern: "sem\\s+(restrições?|limitações?|filtros?|regras?)"
+    category: "jailbreak"
+    weight: 0.78
+    description: "PT: Without restrictions"

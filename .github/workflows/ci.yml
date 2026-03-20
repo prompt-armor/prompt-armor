@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: |
+          uv venv
+          uv pip install -e ".[dev,ml,mcp]"
+
+      - name: Lint
+        run: |
+          source .venv/bin/activate
+          ruff check src/ tests/
+
+      - name: Format check
+        run: |
+          source .venv/bin/activate
+          ruff format --check src/ tests/
+
+      - name: Type check
+        run: |
+          source .venv/bin/activate
+          mypy src/llm_shield/ --ignore-missing-imports
+
+      - name: Unit tests
+        run: |
+          source .venv/bin/activate
+          pytest tests/unit/ -v --tb=short
+
+      - name: Integration tests
+        run: |
+          source .venv/bin/activate
+          pytest tests/integration/ -v --tb=short
