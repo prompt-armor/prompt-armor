@@ -14,8 +14,8 @@ import math
 import time
 from collections import Counter
 
-from llm_shield.config import ShieldConfig
-from llm_shield.models import Category, Decision, LayerResult, ShieldResult
+from prompt_armor.config import ShieldConfig
+from prompt_armor.models import Category, Decision, LayerResult, ShieldResult
 
 # --- Trained meta-classifier coefficients ---
 # Learned via LogisticRegressionCV with class_weight='balanced'

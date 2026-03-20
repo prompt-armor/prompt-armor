@@ -15,9 +15,9 @@ from pathlib import Path
 
 import numpy as np
 
-from llm_shield.config import ShieldConfig
-from llm_shield.layers.base import BaseLayer
-from llm_shield.models import CATEGORY_MAP, Category, Evidence, LayerResult
+from prompt_armor.config import ShieldConfig
+from prompt_armor.layers.base import BaseLayer
+from prompt_armor.models import CATEGORY_MAP, Category, Evidence, LayerResult
 
 _CATEGORY_MAP: dict[str, Category | None] = {**CATEGORY_MAP, "benign": None}
 

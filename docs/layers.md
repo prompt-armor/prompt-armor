@@ -1,6 +1,6 @@
 # Analysis Layers
 
-llm-shield uses 4 analysis layers that run **in parallel**, combined by a trained meta-classifier.
+prompt-armor uses 4 analysis layers that run **in parallel**, combined by a trained meta-classifier.
 
 ```
 INPUT → NORMALIZE → SEGMENT → [L1 | L2 | L3 | L4] → META-CLASSIFIER → DECISION

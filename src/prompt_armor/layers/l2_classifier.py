@@ -14,9 +14,9 @@ from pathlib import Path
 
 import numpy as np
 
-from llm_shield.config import ShieldConfig
-from llm_shield.layers.base import BaseLayer
-from llm_shield.models import Category, Evidence, LayerResult
+from prompt_armor.config import ShieldConfig
+from prompt_armor.layers.base import BaseLayer
+from prompt_armor.models import Category, Evidence, LayerResult
 
 _DEFAULT_MODEL_DIR = Path(__file__).parent.parent / "data" / "models"
 
@@ -114,7 +114,7 @@ class L2ClassifierLayer(BaseLayer):
 
             from huggingface_hub import hf_hub_download
 
-            logger = logging.getLogger("llm_shield")
+            logger = logging.getLogger("prompt_armor")
             logger.info("Downloading L2 classifier model (83MB, one-time)...")
 
             model_id = L2ClassifierLayer._MODEL_ID
@@ -129,7 +129,7 @@ class L2ClassifierLayer(BaseLayer):
 
             logger.info("Model downloaded successfully.")
         except Exception as e:
-            logging.getLogger("llm_shield").warning("Model download failed: %s", e)
+            logging.getLogger("prompt_armor").warning("Model download failed: %s", e)
 
     def analyze(self, text: str) -> LayerResult:
         """Classify prompt as malicious or benign."""
@@ -234,9 +234,9 @@ class L2ClassifierLayer(BaseLayer):
         # Scout-22m outputs ~0.23 for benign and ~0.78 for attacks.
         # Without calibration, the fusion layer sees compressed scores that
         # underweight L2 relative to L1/L3/L4 which use the full 0-1 range.
-        _FLOOR = 0.23  # typical benign score
-        _CEIL = 0.78   # typical attack score
-        calibrated = (raw_prob - _FLOOR) / (_CEIL - _FLOOR)
+        score_floor = 0.23  # typical benign score
+        score_ceil = 0.78   # typical attack score
+        calibrated = (raw_prob - score_floor) / (score_ceil - score_floor)
         calibrated = max(0.0, min(1.0, calibrated))
 
         # Evidence threshold on calibrated score

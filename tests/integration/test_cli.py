@@ -6,7 +6,7 @@ import json as json_mod
 
 from click.testing import CliRunner
 
-from llm_shield.cli.main import cli
+from prompt_armor.cli.main import cli
 
 
 def _extract_json(output: str) -> dict | list:
@@ -27,7 +27,7 @@ class TestCLI:
         runner = CliRunner()
         result = runner.invoke(cli, ["--version"])
         assert result.exit_code == 0
-        assert "llm-shield" in result.output
+        assert "prompt-armor" in result.output
 
     def test_analyze_benign(self) -> None:
         runner = CliRunner()

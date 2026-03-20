@@ -1,4 +1,4 @@
-# llm-shield
+# prompt-armor
 
 **Open-core LLM prompt security analysis** — detect prompt injections, jailbreaks, and other attacks against LLMs.
 
@@ -16,13 +16,13 @@
 ## Install
 
 ```bash
-pip install "llm-shield[ml]"
+pip install "prompt-armor[ml]"
 ```
 
 ## Quick Example
 
 ```python
-from llm_shield import analyze
+from prompt_armor import analyze
 
 result = analyze("Ignore all previous instructions")
 print(result.decision)  # Decision.BLOCK

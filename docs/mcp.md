@@ -1,11 +1,11 @@
 # MCP Server
 
-llm-shield provides an [MCP](https://modelcontextprotocol.io/) server for integration with Claude Desktop, Cursor, and other MCP-compatible clients.
+prompt-armor provides an [MCP](https://modelcontextprotocol.io/) server for integration with Claude Desktop, Cursor, and other MCP-compatible clients.
 
 ## Starting the Server
 
 ```bash
-llm-shield-mcp
+prompt-armor-mcp
 ```
 
 ## Claude Desktop Configuration
@@ -15,8 +15,8 @@ Add to `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "llm-shield": {
-      "command": "llm-shield-mcp"
+    "prompt-armor": {
+      "command": "prompt-armor-mcp"
     }
   }
 }

@@ -1,8 +1,8 @@
-"""Core data models for llm-shield analysis results."""
+"""Core data models for prompt-armor analysis results."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 
 

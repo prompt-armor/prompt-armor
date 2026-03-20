@@ -7,7 +7,7 @@ from tempfile import NamedTemporaryFile
 
 import yaml
 
-from llm_shield.config import ShieldConfig, load_config
+from prompt_armor.config import ShieldConfig, load_config
 
 
 class TestShieldConfig:

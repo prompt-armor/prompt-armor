@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from llm_shield.config import ShieldConfig
-from llm_shield.layers.l4_structural import L4StructuralLayer
-from llm_shield.models import Category
+from prompt_armor.config import ShieldConfig
+from prompt_armor.layers.l4_structural import L4StructuralLayer
+from prompt_armor.models import Category
 
 
 @pytest.fixture(scope="module")

@@ -1,16 +1,16 @@
 # Configuration
 
-llm-shield looks for configuration in this order:
+prompt-armor looks for configuration in this order:
 
 1. Explicit path passed to `LiteEngine(config=load_config(path))`
-2. `.llm-shield.yml` in the current working directory
-3. `~/.config/llm-shield/.llm-shield.yml`
+2. `.prompt-armor.yml` in the current working directory
+3. `~/.config/prompt-armor/.prompt-armor.yml`
 4. Built-in defaults
 
 ## Generate a Template
 
 ```bash
-llm-shield config --init
+prompt-armor config --init
 ```
 
 ## Configuration Options

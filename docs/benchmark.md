@@ -45,7 +45,7 @@ python scripts/dump_layer_scores.py
 python scripts/train_fusion.py
 ```
 
-Then update the `_META_COEFS` in `src/llm_shield/fusion.py` with the new coefficients.
+Then update the `_META_COEFS` in `src/prompt_armor/fusion.py` with the new coefficients.
 
 ## Dataset
 

@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to llm-shield will be documented in this file.
+All notable changes to prompt-armor will be documented in this file.
 
 ## [0.1.1] - 2026-03-20
 
@@ -46,7 +46,7 @@ All notable changes to llm-shield will be documented in this file.
 - Per-layer timeout (2s) and fail-open error handling
 - Input length guard (50K chars) and segment cap (10)
 - Public benchmark dataset (258 benign + 97 malicious from deepset, TrustAIRLab, Lakera Gandalf)
-- YAML configuration (`.llm-shield.yml`)
+- YAML configuration (`.prompt-armor.yml`)
 - 103 tests (unit + integration)
 - GitHub Actions CI (tests, benchmark, publish)
 
