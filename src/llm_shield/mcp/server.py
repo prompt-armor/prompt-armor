@@ -9,6 +9,7 @@ Usage:
 
 from __future__ import annotations
 
+import functools
 import io
 import logging
 import os
@@ -28,18 +29,17 @@ mcp = FastMCP(
 )
 
 
+@functools.lru_cache(maxsize=1)
 def _get_engine():
-    """Lazy-load the analysis engine."""
+    """Lazy-load the analysis engine. Thread-safe via lru_cache."""
     from llm_shield.engine import LiteEngine
 
-    if not hasattr(_get_engine, "_engine"):
-        old_stdout = sys.stdout
-        sys.stdout = io.StringIO()
-        try:
-            _get_engine._engine = LiteEngine()
-        finally:
-            sys.stdout = old_stdout
-    return _get_engine._engine
+    old_stdout = sys.stdout
+    sys.stdout = io.StringIO()
+    try:
+        return LiteEngine()
+    finally:
+        sys.stdout = old_stdout
 
 
 @mcp.tool()

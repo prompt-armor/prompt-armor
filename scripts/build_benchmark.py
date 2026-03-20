@@ -149,7 +149,7 @@ def fetch_benign_from_deepset() -> list[str]:
     print("  Fetching benign from deepset/prompt-injections...")
     try:
         from datasets import load_dataset
-        ds = load_dataset("deepset/prompt-injections", split="train", trust_remote_code=True)
+        ds = load_dataset("deepset/prompt-injections", split="train")
         benign = []
         for row in ds:
             if row["label"] == 0:  # benign
@@ -169,7 +169,7 @@ def fetch_malicious_holdout() -> list[dict]:
     attack_hashes = load_attack_db()
     try:
         from datasets import load_dataset
-        ds = load_dataset("deepset/prompt-injections", split="test", trust_remote_code=True)
+        ds = load_dataset("deepset/prompt-injections", split="test")
         holdout = []
         for row in ds:
             if row["label"] == 1:  # injection

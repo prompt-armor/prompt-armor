@@ -101,6 +101,10 @@ class L2ClassifierLayer(BaseLayer):
             except Exception:
                 self._use_heuristic = True
 
+    # Pinned model revision for supply chain security
+    _MODEL_ID = "aldenb/scout-prompt-injection-classifier-22m"
+    _MODEL_REVISION = "1b28ceb546c0a79de8f590cde6882fe75c203ede"
+
     @staticmethod
     def _try_download_model(model_path: Path, tokenizer_path: Path) -> None:
         """Download the ONNX model from HuggingFace Hub on first use."""
@@ -113,18 +117,19 @@ class L2ClassifierLayer(BaseLayer):
             logger = logging.getLogger("llm_shield")
             logger.info("Downloading L2 classifier model (83MB, one-time)...")
 
-            model_id = "aldenb/scout-prompt-injection-classifier-22m"
+            model_id = L2ClassifierLayer._MODEL_ID
+            revision = L2ClassifierLayer._MODEL_REVISION
             model_path.parent.mkdir(parents=True, exist_ok=True)
 
-            onnx = hf_hub_download(model_id, "onnx/model_quant.onnx")
+            onnx = hf_hub_download(model_id, "onnx/model_quant.onnx", revision=revision)
             shutil.copy2(onnx, model_path)
 
-            tok = hf_hub_download(model_id, "tokenizer.json")
+            tok = hf_hub_download(model_id, "tokenizer.json", revision=revision)
             shutil.copy2(tok, tokenizer_path)
 
             logger.info("Model downloaded successfully.")
-        except Exception:
-            pass  # Fall back to heuristic silently
+        except Exception as e:
+            logging.getLogger("llm_shield").warning("Model download failed: %s", e)
 
     def analyze(self, text: str) -> LayerResult:
         """Classify prompt as malicious or benign."""

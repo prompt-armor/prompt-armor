@@ -6,10 +6,13 @@ collects results, and fuses them into a single ShieldResult.
 
 from __future__ import annotations
 
+import atexit
+import logging
 import re
 import time
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 
 from llm_shield.config import ShieldConfig, load_config
 from llm_shield.fusion import fuse_results
@@ -18,12 +21,15 @@ from llm_shield.layers.l1_regex import L1RegexLayer
 from llm_shield.layers.l4_structural import L4StructuralLayer
 from llm_shield.models import ShieldResult
 
+logger = logging.getLogger("llm_shield")
+
 
 def _build_layers(config: ShieldConfig) -> list[BaseLayer]:
     """Build the list of available layers.
 
     L2 (classifier) and L3 (similarity) are optional and only loaded
-    when their dependencies are available.
+    when their dependencies are available. Catches all exceptions (not just
+    ImportError) to handle broken native libraries (OSError, RuntimeError).
     """
     layers: list[BaseLayer] = [
         L1RegexLayer(config),
@@ -37,7 +43,7 @@ def _build_layers(config: ShieldConfig) -> list[BaseLayer]:
         from llm_shield.layers.l3_similarity import L3SimilarityLayer
 
         layers.append(L3SimilarityLayer(config))
-    except ImportError:
+    except Exception:
         pass
 
     # Try to load L2 (requires onnxruntime)
@@ -46,7 +52,7 @@ def _build_layers(config: ShieldConfig) -> list[BaseLayer]:
         from llm_shield.layers.l2_classifier import L2ClassifierLayer
 
         layers.append(L2ClassifierLayer(config))
-    except ImportError:
+    except Exception:
         pass
 
     return layers
@@ -73,40 +79,23 @@ _ZERO_WIDTH_CHARS = re.compile(
 
 
 def _normalize_text(text: str) -> str:
-    """Normalize text to defeat common evasion techniques.
-
-    - NFKC Unicode normalization (resolves homoglyphs, compatibility chars)
-    - Strip zero-width and invisible characters
-    - Collapse excessive whitespace
-    """
-    # NFKC normalization: maps compatibility chars to canonical forms
-    # e.g., fullwidth 'Ａ' → 'A', ligatures 'ﬁ' → 'fi'
+    """Normalize text to defeat common evasion techniques."""
     text = unicodedata.normalize("NFKC", text)
-
-    # Strip zero-width and invisible characters
     text = _ZERO_WIDTH_CHARS.sub("", text)
-
-    # Collapse excessive whitespace (but preserve newlines)
     text = re.sub(r"[^\S\n]+", " ", text)
-
     return text
 
 
 # Sliding window config
-_WINDOW_WORD_THRESHOLD = 150  # Only segment if text has more than this many words
-_WINDOW_SIZE = 200  # Words per window
-_WINDOW_STRIDE = 100  # Overlap between windows
-_MAX_SEGMENTS = 10  # Cap segments to prevent DoS on very long inputs
-_MAX_INPUT_CHARS = 50_000  # Reject inputs above this length
+_WINDOW_WORD_THRESHOLD = 150
+_WINDOW_SIZE = 200
+_WINDOW_STRIDE = 100
+_MAX_SEGMENTS = 10
+_MAX_INPUT_CHARS = 50_000
 
 
 def _segment_text(text: str) -> list[str]:
-    """Split long text into overlapping windows.
-
-    Compound injections hide attacks inside benign text. Analyzing each
-    segment independently prevents the benign majority from diluting the
-    attack signal in embeddings and keyword ratios.
-    """
+    """Split long text into overlapping windows for compound injection detection."""
     words = text.split()
     if len(words) <= _WINDOW_WORD_THRESHOLD:
         return [text]
@@ -114,7 +103,7 @@ def _segment_text(text: str) -> list[str]:
     segments = []
     for i in range(0, len(words), _WINDOW_STRIDE):
         window = words[i : i + _WINDOW_SIZE]
-        if len(window) < 20:  # Skip tiny trailing windows
+        if len(window) < 20:
             break
         segments.append(" ".join(window))
         if len(segments) >= _MAX_SEGMENTS:
@@ -124,16 +113,31 @@ def _segment_text(text: str) -> list[str]:
 
 
 class LiteEngine:
-    """Orchestrates parallel analysis across all available layers."""
+    """Orchestrates parallel analysis across all available layers.
+
+    Supports context manager protocol for proper resource cleanup:
+        with LiteEngine() as engine:
+            result = engine.analyze("some text")
+    """
 
     def __init__(self, config: ShieldConfig | None = None) -> None:
         self._config = config or load_config()
         self._layers = _build_layers(self._config)
-        self._pool = ThreadPoolExecutor(max_workers=len(self._layers))
+        self._pool = ThreadPoolExecutor(max_workers=max(len(self._layers), 1))
 
-        # Initialize all layers
+        # Initialize layers with fail-open: if a layer fails to setup,
+        # remove it and continue with remaining layers.
+        loaded: list[BaseLayer] = []
         for layer in self._layers:
-            layer.setup()
+            try:
+                layer.setup()
+                loaded.append(layer)
+            except Exception as e:
+                logger.warning("Layer %s failed to setup: %s, disabling", layer.name, e)
+        self._layers = loaded
+
+        # Register cleanup on process exit
+        atexit.register(self.close)
 
     def _analyze_single(self, text: str, start: float) -> ShieldResult:
         """Run all layers in parallel on a single text segment.
@@ -141,9 +145,6 @@ class LiteEngine:
         Uses per-layer timeout and fail-open: if a layer hangs or crashes,
         analysis proceeds with the remaining layers.
         """
-        import logging
-
-        logger = logging.getLogger("llm_shield")
         futures = {
             self._pool.submit(layer.analyze, text): layer.name
             for layer in self._layers
@@ -152,9 +153,9 @@ class LiteEngine:
         for future in futures:
             layer_name = futures[future]
             try:
-                result = future.result(timeout=2.0)  # 2s per-layer timeout
+                result = future.result(timeout=2.0)
                 layer_results.append(result)
-            except TimeoutError:
+            except FuturesTimeoutError:
                 logger.warning("Layer %s timed out, skipping", layer_name)
             except Exception as e:
                 logger.warning("Layer %s failed: %s, skipping", layer_name, e)
@@ -162,35 +163,28 @@ class LiteEngine:
         return fuse_results(layer_results, self._config, total_start=start)
 
     def analyze(self, text: str) -> ShieldResult:
-        """Run all layers in parallel and fuse results.
+        """Run all layers in parallel and fuse results."""
+        if not isinstance(text, str):
+            raise TypeError(f"Expected str, got {type(text).__name__}")
 
-        For long texts, uses sliding window segmentation to catch
-        compound injections hidden inside benign content.
-        """
         start = time.perf_counter()
 
-        # Input length guard — prevents DoS via very long inputs
         if len(text) > _MAX_INPUT_CHARS:
             text = text[:_MAX_INPUT_CHARS]
 
-        # Preprocess: normalize Unicode to defeat homoglyph and zero-width bypasses
         text = _normalize_text(text)
 
         segments = _segment_text(text)
 
         if len(segments) == 1:
-            # Short text: single pass (fast path)
             return self._analyze_single(text, start)
 
-        # Long text: analyze full text + each segment, take max
-        results = [self._analyze_single(text, start)]  # Full text for context
+        results = [self._analyze_single(text, start)]
         for segment in segments:
             results.append(self._analyze_single(segment, start))
 
-        # Return the result with the highest risk score
         best = max(results, key=lambda r: r.risk_score)
 
-        # Recalculate latency from original start
         latency = (time.perf_counter() - start) * 1000
         return ShieldResult(
             risk_score=best.risk_score,
@@ -211,3 +205,9 @@ class LiteEngine:
     def close(self) -> None:
         """Shut down the thread pool."""
         self._pool.shutdown(wait=False)
+
+    def __enter__(self) -> LiteEngine:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()

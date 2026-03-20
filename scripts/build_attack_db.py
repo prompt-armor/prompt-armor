@@ -111,7 +111,7 @@ def fetch_deepset_injections() -> list[dict]:
     print("  Fetching deepset/prompt-injections...")
     try:
         from datasets import load_dataset
-        ds = load_dataset("deepset/prompt-injections", split="train", trust_remote_code=True)
+        ds = load_dataset("deepset/prompt-injections", split="train")
         entries = []
         for row in ds:
             if row["label"] == 1:  # injection
@@ -138,7 +138,6 @@ def fetch_trustai_jailbreaks() -> list[dict]:
             "TrustAIRLab/in-the-wild-jailbreak-prompts",
             "jailbreak_2023_12_25",
             split="train",
-            trust_remote_code=True,
         )
         entries = []
         for row in ds:
@@ -163,7 +162,7 @@ def fetch_chatgpt_jailbreaks() -> list[dict]:
     print("  Fetching rubend18/ChatGPT-Jailbreak-Prompts...")
     try:
         from datasets import load_dataset
-        ds = load_dataset("rubend18/ChatGPT-Jailbreak-Prompts", split="train", trust_remote_code=True)
+        ds = load_dataset("rubend18/ChatGPT-Jailbreak-Prompts", split="train")
         entries = []
         for row in ds:
             text = normalize_text(row.get("Prompt", ""))
@@ -185,7 +184,7 @@ def fetch_gandalf() -> list[dict]:
     print("  Fetching Lakera/gandalf_ignore_instructions...")
     try:
         from datasets import load_dataset
-        ds = load_dataset("Lakera/gandalf_ignore_instructions", split="train", trust_remote_code=True)
+        ds = load_dataset("Lakera/gandalf_ignore_instructions", split="train")
         entries = []
         for row in ds:
             text = normalize_text(row.get("text", ""))
