@@ -8,7 +8,7 @@
     <a href="https://github.com/prompt-armor/prompt-armor/actions"><img src="https://img.shields.io/github/actions/workflow/status/prompt-armor/prompt-armor/ci.yml?style=flat-square&label=tests" alt="CI"></a>
     <a href="https://pypi.org/project/prompt-armor/"><img src="https://img.shields.io/pypi/v/prompt-armor?style=flat-square&color=blue" alt="PyPI"></a>
     <a href="https://pypi.org/project/prompt-armor/"><img src="https://img.shields.io/pypi/pyversions/prompt-armor?style=flat-square" alt="Python"></a>
-    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache_2.0-blue?style=flat-square" alt="License"></a>
   </p>
 </p>
 
@@ -49,7 +49,7 @@ result.latency_ms   # 12.4
 | Avg latency | **~15ms** | 200-500ms | 1-3s | ~50ms | ~100ms |
 | MCP Server | **Yes** | No | No | No | No |
 | CI/CD exit codes | **Yes** | No | No | No | No |
-| License | **MIT** | MIT | Apache 2.0 | Proprietary | Apache 2.0 |
+| License | **Apache 2.0** | MIT | Apache 2.0 | Proprietary | Apache 2.0 |
 | Status | **Active** | Active (Palo Alto) | Active (NVIDIA) | Active (Check Point) | Dead |
 
 <details>
@@ -426,7 +426,7 @@ PRs welcome for:
 
 ## License
 
-[MIT](LICENSE) — use it however you want.
+[Apache 2.0](LICENSE) — use it however you want. Includes patent grant.
 
 ---
 
