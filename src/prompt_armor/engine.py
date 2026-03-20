@@ -127,8 +127,7 @@ class LiteEngine:
         self._layers = _build_layers(self._config)
         self._pool = ThreadPoolExecutor(max_workers=max(len(self._layers), 1))
 
-        # Initialize layers with fail-open: if a layer fails to setup,
-        # remove it and continue with remaining layers.
+        # Initialize layers with fail-open
         loaded: list[BaseLayer] = []
         for layer in self._layers:
             try:
@@ -137,6 +136,21 @@ class LiteEngine:
             except Exception as e:
                 logger.warning("Layer %s failed to setup: %s, disabling", layer.name, e)
         self._layers = loaded
+
+        # Initialize analytics collector if enabled
+        self._collector = None
+        if self._config.analytics.enabled:
+            try:
+                from prompt_armor.collector import AnalyticsCollector
+
+                self._collector = AnalyticsCollector(
+                    db_path=self._config.analytics.db_path,
+                    store_prompts=self._config.analytics.store_prompts,
+                    max_records=self._config.analytics.max_records,
+                )
+                logger.info("Analytics enabled: %s", self._config.analytics.db_path)
+            except Exception as e:
+                logger.warning("Analytics init failed: %s", e)
 
         # Register cleanup on process exit
         atexit.register(self.close)
@@ -164,11 +178,17 @@ class LiteEngine:
 
         return fuse_results(layer_results, self._config, total_start=start)
 
+    def _record_analytics(self, text: str, result: ShieldResult) -> None:
+        """Record analysis result to analytics DB (non-blocking)."""
+        if self._collector is not None:
+            self._collector.record(text, result)
+
     def analyze(self, text: str) -> ShieldResult:
         """Run all layers in parallel and fuse results."""
         if not isinstance(text, str):
             raise TypeError(f"Expected str, got {type(text).__name__}")
 
+        original_text = text
         start = time.perf_counter()
 
         if len(text) > _MAX_INPUT_CHARS:
@@ -179,7 +199,9 @@ class LiteEngine:
         segments = _segment_text(text)
 
         if len(segments) == 1:
-            return self._analyze_single(text, start)
+            result = self._analyze_single(text, start)
+            self._record_analytics(original_text, result)
+            return result
 
         results = [self._analyze_single(text, start)]
         for segment in segments:
@@ -188,7 +210,7 @@ class LiteEngine:
         best = max(results, key=lambda r: r.risk_score)
 
         latency = (time.perf_counter() - start) * 1000
-        return ShieldResult(
+        result = ShieldResult(
             risk_score=best.risk_score,
             confidence=best.confidence,
             decision=best.decision,
@@ -198,6 +220,8 @@ class LiteEngine:
             latency_ms=round(latency, 2),
             layer_results=best.layer_results,
         )
+        self._record_analytics(original_text, result)
+        return result
 
     @property
     def active_layers(self) -> list[str]:
@@ -205,8 +229,10 @@ class LiteEngine:
         return [layer.name for layer in self._layers]
 
     def close(self) -> None:
-        """Shut down the thread pool."""
+        """Shut down the thread pool and analytics collector."""
         self._pool.shutdown(wait=False)
+        if self._collector is not None:
+            self._collector.close()
 
     def __enter__(self) -> LiteEngine:
         return self

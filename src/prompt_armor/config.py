@@ -26,6 +26,16 @@ class ThresholdConfig(BaseModel):
     min_confidence: float = Field(default=0.5, ge=0.0, le=1.0)
 
 
+class AnalyticsConfig(BaseModel):
+    """Analytics collection configuration."""
+
+    enabled: bool = False
+    db_path: Path = Field(default_factory=lambda: Path.home() / ".prompt-armor" / "analytics.db")
+    store_prompts: bool = False
+    retention_days: int = Field(default=30, ge=1)
+    max_records: int = Field(default=100_000, ge=1000)
+
+
 class ShieldConfig(BaseModel):
     """Top-level configuration for prompt-armor."""
 
@@ -35,6 +45,7 @@ class ShieldConfig(BaseModel):
     divergence_penalty: float = Field(default=0.15, ge=0.0, le=1.0)
     rules_path: Path | None = None
     attacks_path: Path | None = None
+    analytics: AnalyticsConfig = Field(default_factory=AnalyticsConfig)
 
     @field_validator("rules_path", "attacks_path", mode="before")
     @classmethod
