@@ -2,11 +2,11 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in llm-shield, please report it responsibly.
+If you discover a security vulnerability in prompt-shield, please report it responsibly.
 
 **Do NOT open a public GitHub issue for security vulnerabilities.**
 
-Instead, please email: **security@llm-shield.dev** (or open a private security advisory on GitHub).
+Instead, please email: **security@prompt-shield.dev** (or open a private security advisory on GitHub).
 
 Include:
 - Description of the vulnerability
@@ -33,7 +33,7 @@ Security issues in the following areas are in scope:
 
 ## Known Limitations
 
-llm-shield is a defense-in-depth layer, not a complete security solution:
+prompt-shield is a defense-in-depth layer, not a complete security solution:
 - Single-prompt analysis only (no multi-turn session tracking)
 - ~19ms latency adds a small overhead to each request
 - L2 classifier requires model download (~83MB) for full accuracy

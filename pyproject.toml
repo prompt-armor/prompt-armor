@@ -3,13 +3,13 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "llm-shield"
+name = "prompt-shield"
 version = "0.1.0"
 description = "Open-core LLM prompt security analysis — detect prompt injections, jailbreaks, and other attacks"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
-authors = [{ name = "llm-shield contributors" }]
+authors = [{ name = "prompt-shield contributors" }]
 keywords = ["llm", "security", "prompt-injection", "jailbreak", "mcp"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -48,20 +48,20 @@ mcp = [
     "mcp>=1.0",
 ]
 all = [
-    "llm-shield[ml,dev,mcp]",
+    "prompt-shield[ml,dev,mcp]",
 ]
 
 [project.scripts]
-llm-shield = "llm_shield.cli.main:cli"
-llm-shield-mcp = "llm_shield.mcp.server:main"
+prompt-shield = "prompt_shield.cli.main:cli"
+prompt-shield-mcp = "prompt_shield.mcp.server:main"
 
 [project.urls]
-Homepage = "https://github.com/llm-shield/llm-shield"
-Repository = "https://github.com/llm-shield/llm-shield"
-Issues = "https://github.com/llm-shield/llm-shield/issues"
+Homepage = "https://github.com/prompt-shield/prompt-shield"
+Repository = "https://github.com/prompt-shield/prompt-shield"
+Issues = "https://github.com/prompt-shield/prompt-shield/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/llm_shield"]
+packages = ["src/prompt_shield"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

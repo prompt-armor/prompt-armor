@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from llm_shield.models import LayerResult
+from prompt_shield.models import LayerResult
 
 
 class BaseLayer(ABC):

@@ -2,15 +2,15 @@
 
 ## Commands
 
-### `llm-shield analyze`
+### `prompt-shield analyze`
 
 Analyze a single prompt for security risks.
 
 ```bash
-llm-shield analyze "Your prompt here"
-llm-shield analyze --file input.txt
-llm-shield analyze --json "prompt"
-echo "prompt" | llm-shield analyze
+prompt-shield analyze "Your prompt here"
+prompt-shield analyze --file input.txt
+prompt-shield analyze --json "prompt"
+echo "prompt" | prompt-shield analyze
 ```
 
 **Options:**
@@ -21,13 +21,13 @@ echo "prompt" | llm-shield analyze
 
 **Exit codes:** 0=allow, 1=warn, 2=block, 3=error
 
-### `llm-shield scan`
+### `prompt-shield scan`
 
 Batch-scan prompt files in a directory.
 
 ```bash
-llm-shield scan --dir ./prompts/
-llm-shield scan --dir ./prompts/ --glob "*.md" --format json
+prompt-shield scan --dir ./prompts/
+prompt-shield scan --dir ./prompts/ --glob "*.md" --format json
 ```
 
 **Options:**
@@ -36,15 +36,15 @@ llm-shield scan --dir ./prompts/ --glob "*.md" --format json
 - `--format` — Output format: table, json, csv
 - `--fail-on` — Exit non-zero if any file reaches this level (warn or block)
 
-### `llm-shield config`
+### `prompt-shield config`
 
 Show or initialize configuration.
 
 ```bash
-llm-shield config --show
-llm-shield config --init
+prompt-shield config --show
+prompt-shield config --init
 ```
 
-### `llm-shield --version`
+### `prompt-shield --version`
 
 Show version.

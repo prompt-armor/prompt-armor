@@ -7,7 +7,7 @@ exports to ONNX format, and optionally quantizes to INT8.
 Usage:
     python scripts/export_l2_model.py
     python scripts/export_l2_model.py --quantize
-    python scripts/export_l2_model.py --output src/llm_shield/data/models/
+    python scripts/export_l2_model.py --output src/prompt_shield/data/models/
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import shutil
 from pathlib import Path
 
 MODEL_ID = "aldenb/scout-prompt-injection-classifier-22m"
-DEFAULT_OUTPUT = Path(__file__).parent.parent / "src" / "llm_shield" / "data" / "models"
+DEFAULT_OUTPUT = Path(__file__).parent.parent / "src" / "prompt_shield" / "data" / "models"
 
 
 def export_model(output_dir: Path, quantize: bool = False) -> None:

@@ -1,4 +1,4 @@
-"""CLI for llm-shield.
+"""CLI for prompt-shield.
 
 Commands:
   analyze  Analyze a single prompt
@@ -20,8 +20,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from llm_shield._version import __version__
-from llm_shield.models import Decision
+from prompt_shield._version import __version__
+from prompt_shield.models import Decision
 
 console = Console()
 
@@ -63,7 +63,7 @@ def _score_bar(score: float, width: int = 20) -> str:
 
 def _result_to_dict(result: object) -> dict:
     """Convert ShieldResult to a JSON-serializable dict."""
-    from llm_shield.models import ShieldResult
+    from prompt_shield.models import ShieldResult
 
     if not isinstance(result, ShieldResult):
         raise TypeError(f"Expected ShieldResult, got {type(result).__name__}")
@@ -71,9 +71,9 @@ def _result_to_dict(result: object) -> dict:
 
 
 @click.group()
-@click.version_option(version=__version__, prog_name="llm-shield")
+@click.version_option(version=__version__, prog_name="prompt-shield")
 def cli() -> None:
-    """llm-shield — LLM prompt security analysis."""
+    """prompt-shield — LLM prompt security analysis."""
 
 
 @cli.command()
@@ -121,8 +121,8 @@ def analyze(
         logging.getLogger("transformers").setLevel(logging.ERROR)
         logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
 
-        from llm_shield.config import ShieldConfig, load_config
-        from llm_shield.engine import LiteEngine
+        from prompt_shield.config import ShieldConfig, load_config
+        from prompt_shield.engine import LiteEngine
 
         cfg = load_config(Path(config)) if config else ShieldConfig()
         engine = LiteEngine(cfg)
@@ -153,7 +153,7 @@ def analyze(
 @click.option("--fail-on", type=click.Choice(["warn", "block"]), default="block", help="Exit non-zero if any file reaches this level")
 def scan(directory: str, pattern: str, fmt: str, fail_on: str) -> None:
     """Batch-scan prompt files in a directory."""
-    from llm_shield.engine import LiteEngine
+    from prompt_shield.engine import LiteEngine
 
     dir_path = Path(directory)
     files = sorted(dir_path.glob(pattern))
@@ -201,17 +201,17 @@ def scan(directory: str, pattern: str, fmt: str, fail_on: str) -> None:
 
 @cli.command("config")
 @click.option("--show", is_flag=True, default=True, help="Show resolved configuration")
-@click.option("--init", is_flag=True, help="Create a template .llm-shield.yml")
+@click.option("--init", is_flag=True, help="Create a template .prompt-shield.yml")
 def config_cmd(show: bool, init: bool) -> None:
     """Show or initialize configuration."""
     if init:
-        template = Path(".llm-shield.yml")
+        template = Path(".prompt-shield.yml")
         if template.exists():
             console.print("[yellow]Config file already exists[/yellow]")
             return
         template.write_text(
-            "# llm-shield configuration\n"
-            "# See: https://github.com/llm-shield/llm-shield\n\n"
+            "# prompt-shield configuration\n"
+            "# See: https://github.com/prompt-shield/prompt-shield\n\n"
             "weights:\n"
             "  l1_regex: 0.20\n"
             "  l2_classifier: 0.30\n"
@@ -225,10 +225,10 @@ def config_cmd(show: bool, init: bool) -> None:
             "convergence_boost: 0.10\n"
             "divergence_penalty: 0.15\n"
         )
-        console.print("[green]Created .llm-shield.yml[/green]")
+        console.print("[green]Created .prompt-shield.yml[/green]")
         return
 
-    from llm_shield.config import load_config
+    from prompt_shield.config import load_config
 
     cfg = load_config()
     console.print(Panel(cfg.model_dump_json(indent=2), title="Resolved Configuration"))
@@ -236,7 +236,7 @@ def config_cmd(show: bool, init: bool) -> None:
 
 def _print_rich_result(result: object, prompt: str, verbose: bool) -> None:
     """Print analysis result with Rich formatting."""
-    from llm_shield.models import ShieldResult
+    from prompt_shield.models import ShieldResult
 
     if not isinstance(result, ShieldResult):
         raise TypeError(f"Expected ShieldResult, got {type(result).__name__}")
@@ -257,7 +257,7 @@ def _print_rich_result(result: object, prompt: str, verbose: bool) -> None:
     if result.needs_council:
         table.add_row("Council", "[cyan]Recommended (uncertainty detected)[/cyan]")
 
-    console.print(Panel(table, title="llm-shield analysis", border_style=_DECISION_COLORS[result.decision]))
+    console.print(Panel(table, title="prompt-shield analysis", border_style=_DECISION_COLORS[result.decision]))
 
     # Evidence
     if result.evidence:
@@ -293,7 +293,7 @@ def _print_rich_result(result: object, prompt: str, verbose: bool) -> None:
 
 def _print_scan_table(results: list[dict]) -> None:
     """Print scan results as a Rich table."""
-    from llm_shield.models import ShieldResult
+    from prompt_shield.models import ShieldResult
 
     table = Table(title="Scan Results", show_lines=True)
     table.add_column("File", style="cyan")

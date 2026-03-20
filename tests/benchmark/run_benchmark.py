@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Benchmark runner for llm-shield.
+"""Benchmark runner for prompt-shield.
 
 Runs the analysis engine against a labeled dataset and computes
 accuracy, precision, recall, F1, and latency metrics.
@@ -81,7 +81,7 @@ def run_benchmark(dataset_dir: Path | None = None, output_path: Path | None = No
     print()
 
     # Initialize engine (suppress model loading output)
-    from llm_shield.engine import LiteEngine
+    from prompt_shield.engine import LiteEngine
 
     old_stdout = sys.stdout
     sys.stdout = io.StringIO()
@@ -198,7 +198,7 @@ def main() -> None:
     """CLI entry point."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="llm-shield benchmark")
+    parser = argparse.ArgumentParser(description="prompt-shield benchmark")
     parser.add_argument("--dataset", type=Path, default=DATASET_DIR, help="Dataset directory")
     parser.add_argument("--output", type=Path, help="Output JSON file")
     args = parser.parse_args()

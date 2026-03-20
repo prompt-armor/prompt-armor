@@ -28,7 +28,7 @@ DEFAULT_OUTPUT = Path(__file__).parent.parent / "scripts" / "layer_scores.json"
 
 
 def dump_scores(output_path: Path) -> None:
-    from llm_shield.engine import LiteEngine
+    from prompt_shield.engine import LiteEngine
 
     # Suppress model loading noise
     old_stdout = sys.stdout

@@ -6,7 +6,7 @@ and other sources into a single known_attacks.jsonl file.
 
 Usage:
     python scripts/build_attack_db.py
-    python scripts/build_attack_db.py --output src/llm_shield/data/attacks/known_attacks.jsonl
+    python scripts/build_attack_db.py --output src/prompt_shield/data/attacks/known_attacks.jsonl
 """
 
 from __future__ import annotations
@@ -16,10 +16,10 @@ import json
 import sys
 from pathlib import Path
 
-# Add src to path so we can import llm_shield for auto-categorization
+# Add src to path so we can import prompt_shield for auto-categorization
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-DEFAULT_OUTPUT = Path(__file__).parent.parent / "src" / "llm_shield" / "data" / "attacks" / "known_attacks.jsonl"
+DEFAULT_OUTPUT = Path(__file__).parent.parent / "src" / "prompt_shield" / "data" / "attacks" / "known_attacks.jsonl"
 
 # Category mapping for auto-categorization
 CATEGORY_KEYWORDS = {
@@ -289,7 +289,7 @@ def build_attack_db(output_path: Path | None = None) -> None:
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Build llm-shield attack database")
+    parser = argparse.ArgumentParser(description="Build prompt-shield attack database")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT, help="Output JSONL path")
     args = parser.parse_args()
     build_attack_db(args.output)

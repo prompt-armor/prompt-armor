@@ -36,11 +36,11 @@ htmlcov/
 .ruff_cache/
 
 # Models (distributed via download-on-first-use, too large for git)
-src/llm_shield/data/models/*.onnx
-src/llm_shield/data/models/*.bin
-src/llm_shield/data/models/*.npy
-src/llm_shield/data/models/*.json
-!src/llm_shield/data/models/.gitkeep
+src/prompt_shield/data/models/*.onnx
+src/prompt_shield/data/models/*.bin
+src/prompt_shield/data/models/*.npy
+src/prompt_shield/data/models/*.json
+!src/prompt_shield/data/models/.gitkeep
 
 # Script outputs (generated, not tracked)
 scripts/*.json

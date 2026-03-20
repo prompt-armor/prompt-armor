@@ -14,14 +14,14 @@ import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 
-from llm_shield.config import ShieldConfig, load_config
-from llm_shield.fusion import fuse_results
-from llm_shield.layers.base import BaseLayer
-from llm_shield.layers.l1_regex import L1RegexLayer
-from llm_shield.layers.l4_structural import L4StructuralLayer
-from llm_shield.models import ShieldResult
+from prompt_shield.config import ShieldConfig, load_config
+from prompt_shield.fusion import fuse_results
+from prompt_shield.layers.base import BaseLayer
+from prompt_shield.layers.l1_regex import L1RegexLayer
+from prompt_shield.layers.l4_structural import L4StructuralLayer
+from prompt_shield.models import ShieldResult
 
-logger = logging.getLogger("llm_shield")
+logger = logging.getLogger("prompt_shield")
 
 
 def _build_layers(config: ShieldConfig) -> list[BaseLayer]:
@@ -41,7 +41,7 @@ def _build_layers(config: ShieldConfig) -> list[BaseLayer]:
         import faiss  # noqa: F401
         import sentence_transformers  # noqa: F401
 
-        from llm_shield.layers.l3_similarity import L3SimilarityLayer
+        from prompt_shield.layers.l3_similarity import L3SimilarityLayer
 
         layers.append(L3SimilarityLayer(config))
     except Exception:
@@ -51,7 +51,7 @@ def _build_layers(config: ShieldConfig) -> list[BaseLayer]:
     try:
         import onnxruntime  # noqa: F401
 
-        from llm_shield.layers.l2_classifier import L2ClassifierLayer
+        from prompt_shield.layers.l2_classifier import L2ClassifierLayer
 
         layers.append(L2ClassifierLayer(config))
     except Exception:

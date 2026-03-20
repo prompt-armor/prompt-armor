@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug in llm-shield
+about: Report a bug in prompt-shield
 title: "[Bug] "
 labels: bug
 ---
@@ -10,7 +10,7 @@ A clear description of what the bug is.
 
 **To Reproduce**
 ```python
-from llm_shield import analyze
+from prompt_shield import analyze
 result = analyze("your prompt here")
 # Expected: ...
 # Actual: ...
@@ -19,7 +19,7 @@ result = analyze("your prompt here")
 **Environment**
 - OS: [e.g., macOS, Ubuntu]
 - Python version: [e.g., 3.12]
-- llm-shield version: [e.g., 0.1.0]
+- prompt-shield version: [e.g., 0.1.0]
 - ML model installed: [yes/no]
 
 **Additional context**

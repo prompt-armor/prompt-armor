@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from llm_shield.config import ShieldConfig
-from llm_shield.fusion import fuse_results
-from llm_shield.models import Category, Decision, Evidence, LayerResult
+from prompt_shield.config import ShieldConfig
+from prompt_shield.fusion import fuse_results
+from prompt_shield.models import Category, Decision, Evidence, LayerResult
 
 
 def _make_lr(layer: str, score: float, confidence: float = 0.9) -> LayerResult:

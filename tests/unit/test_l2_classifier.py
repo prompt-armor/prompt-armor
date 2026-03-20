@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from llm_shield.config import ShieldConfig
-from llm_shield.layers.l2_classifier import L2ClassifierLayer
-from llm_shield.models import Category
+from prompt_shield.config import ShieldConfig
+from prompt_shield.layers.l2_classifier import L2ClassifierLayer
+from prompt_shield.models import Category
 
 
 @pytest.fixture(scope="module")

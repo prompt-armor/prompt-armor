@@ -1,12 +1,12 @@
-# Contributing to llm-shield
+# Contributing to prompt-shield
 
 Thanks for your interest in contributing! Here's how you can help.
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/llm-shield/llm-shield
-cd llm-shield
+git clone https://github.com/prompt-shield/prompt-shield
+cd prompt-shield
 pip install -e ".[dev,ml,mcp]"
 pytest tests/ -v
 ```
@@ -17,7 +17,7 @@ pytest tests/ -v
 
 The most impactful contribution is expanding the attack database. Add entries to:
 
-- `src/llm_shield/data/attacks/known_attacks.jsonl` — Known attack prompts for L3 similarity matching
+- `src/prompt_shield/data/attacks/known_attacks.jsonl` — Known attack prompts for L3 similarity matching
 - `tests/benchmark/dataset/malicious.jsonl` — Labeled attack prompts for benchmarking
 
 Format:
@@ -29,7 +29,7 @@ Categories: `prompt_injection`, `jailbreak`, `identity_override`, `system_prompt
 
 ### Add Regex Rules
 
-Add patterns to `src/llm_shield/data/rules/default_rules.yml`. Each rule needs:
+Add patterns to `src/prompt_shield/data/rules/default_rules.yml`. Each rule needs:
 - Unique ID (e.g., `PI-011` for prompt injection rule 11)
 - Regex pattern (case-insensitive by default)
 - Category, weight (0.0-1.0), and description
@@ -61,7 +61,7 @@ ruff check src/ tests/
 ruff format src/ tests/
 
 # Type check
-mypy src/llm_shield/
+mypy src/prompt_shield/
 
 # Run benchmark
 python tests/benchmark/run_benchmark.py

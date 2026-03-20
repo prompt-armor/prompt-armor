@@ -1,4 +1,4 @@
-"""Configuration loading and validation for llm-shield."""
+"""Configuration loading and validation for prompt-shield."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ class ThresholdConfig(BaseModel):
 
 
 class ShieldConfig(BaseModel):
-    """Top-level configuration for llm-shield."""
+    """Top-level configuration for prompt-shield."""
 
     weights: LayerWeights = Field(default_factory=LayerWeights)
     thresholds: ThresholdConfig = Field(default_factory=ThresholdConfig)
@@ -48,7 +48,7 @@ class ShieldConfig(BaseModel):
         return p
 
 
-_CONFIG_FILENAMES = [".llm-shield.yml", ".llm-shield.yaml"]
+_CONFIG_FILENAMES = [".prompt-shield.yml", ".prompt-shield.yaml"]
 
 
 def _find_config_file() -> Path | None:
@@ -59,7 +59,7 @@ def _find_config_file() -> Path | None:
         if p.is_file():
             return p
         # Home config dir
-        p = Path.home() / ".config" / "llm-shield" / name
+        p = Path.home() / ".config" / "prompt-shield" / name
         if p.is_file():
             return p
     return None
@@ -68,7 +68,7 @@ def _find_config_file() -> Path | None:
 def load_config(path: Path | None = None) -> ShieldConfig:
     """Load configuration from a YAML file, falling back to defaults.
 
-    Discovery order: explicit path > .llm-shield.yml in CWD > ~/.config/llm-shield/ > defaults.
+    Discovery order: explicit path > .prompt-shield.yml in CWD > ~/.config/prompt-shield/ > defaults.
     """
     if path is None:
         path = _find_config_file()

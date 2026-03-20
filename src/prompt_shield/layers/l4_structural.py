@@ -13,9 +13,9 @@ import re
 import string
 import time
 
-from llm_shield.config import ShieldConfig
-from llm_shield.layers.base import BaseLayer
-from llm_shield.models import Category, Evidence, LayerResult
+from prompt_shield.config import ShieldConfig
+from prompt_shield.layers.base import BaseLayer
+from prompt_shield.models import Category, Evidence, LayerResult
 
 # Imperative verbs commonly used in prompt injection
 _IMPERATIVE_VERBS = {

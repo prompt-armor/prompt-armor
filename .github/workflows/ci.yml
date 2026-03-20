@@ -42,7 +42,7 @@ jobs:
       - name: Type check
         run: |
           source .venv/bin/activate
-          mypy src/llm_shield/ --ignore-missing-imports
+          mypy src/prompt_shield/ --ignore-missing-imports
 
       - name: Unit tests
         run: |

@@ -1,10 +1,10 @@
-"""MCP Server for llm-shield.
+"""MCP Server for prompt-shield.
 
 Exposes prompt security analysis as MCP tools that can be used
 by Claude Desktop, Cursor, and other MCP-compatible clients.
 
 Usage:
-    llm-shield-mcp
+    prompt-shield-mcp
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP(
-    "llm-shield",
+    "prompt-shield",
     instructions="LLM prompt security analysis — detect prompt injections, jailbreaks, and other attacks.",
 )
 
@@ -32,7 +32,7 @@ mcp = FastMCP(
 @functools.lru_cache(maxsize=1)
 def _get_engine():
     """Lazy-load the analysis engine. Thread-safe via lru_cache."""
-    from llm_shield.engine import LiteEngine
+    from prompt_shield.engine import LiteEngine
 
     old_stdout = sys.stdout
     sys.stdout = io.StringIO()

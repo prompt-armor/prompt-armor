@@ -1,8 +1,8 @@
-site_name: llm-shield
+site_name: prompt-shield
 site_description: Open-core LLM prompt security analysis
-site_url: https://llm-shield.dev
-repo_url: https://github.com/llm-shield/llm-shield
-repo_name: llm-shield/llm-shield
+site_url: https://prompt-shield.dev
+repo_url: https://github.com/prompt-shield/prompt-shield
+repo_name: prompt-shield/prompt-shield
 
 theme:
   name: material

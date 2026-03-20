@@ -14,9 +14,9 @@ from pathlib import Path
 
 import numpy as np
 
-from llm_shield.config import ShieldConfig
-from llm_shield.layers.base import BaseLayer
-from llm_shield.models import Category, Evidence, LayerResult
+from prompt_shield.config import ShieldConfig
+from prompt_shield.layers.base import BaseLayer
+from prompt_shield.models import Category, Evidence, LayerResult
 
 _DEFAULT_MODEL_DIR = Path(__file__).parent.parent / "data" / "models"
 
@@ -114,7 +114,7 @@ class L2ClassifierLayer(BaseLayer):
 
             from huggingface_hub import hf_hub_download
 
-            logger = logging.getLogger("llm_shield")
+            logger = logging.getLogger("prompt_shield")
             logger.info("Downloading L2 classifier model (83MB, one-time)...")
 
             model_id = L2ClassifierLayer._MODEL_ID
@@ -129,7 +129,7 @@ class L2ClassifierLayer(BaseLayer):
 
             logger.info("Model downloaded successfully.")
         except Exception as e:
-            logging.getLogger("llm_shield").warning("Model download failed: %s", e)
+            logging.getLogger("prompt_shield").warning("Model download failed: %s", e)
 
     def analyze(self, text: str) -> LayerResult:
         """Classify prompt as malicious or benign."""

@@ -1,4 +1,4 @@
-# llm-shield L1 Regex Rules
+# prompt-shield L1 Regex Rules
 # Each rule has: id, pattern (regex), category, weight (0.0-1.0), description
 # Patterns are case-insensitive by default
 

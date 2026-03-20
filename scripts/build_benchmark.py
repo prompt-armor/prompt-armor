@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-ATTACK_DB = Path(__file__).parent.parent / "src" / "llm_shield" / "data" / "attacks" / "known_attacks.jsonl"
+ATTACK_DB = Path(__file__).parent.parent / "src" / "prompt_shield" / "data" / "attacks" / "known_attacks.jsonl"
 BENCH_DIR = Path(__file__).parent.parent / "tests" / "benchmark" / "dataset"
 
 # Hand-curated benign prompts covering diverse topics
