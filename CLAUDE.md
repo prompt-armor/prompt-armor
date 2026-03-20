@@ -74,3 +74,35 @@ The core pipeline runs 4 analysis layers **in parallel** via `ThreadPoolExecutor
 - `data/rules/default_rules.yml` — L1 regex rules (EN + DE/ES/FR/PT)
 - `data/attacks/known_attacks.jsonl` — L3 attack DB (1,151 entries)
 - `data/models/` — L2 ONNX model (auto-downloaded, not in git)
+
+## Git Workflow (MANDATORY)
+
+### Branches
+| Branch | Role |
+|--------|------|
+| `main` | Production — never commit directly |
+| `dev` | Staging — receives merges from feature branches via PR |
+| `feature/*`, `fix/*`, `refactor/*`, `chore/*`, `docs/*` | Work branches — always branch from `dev` |
+| `hotfix/*` | Emergency fixes — branch from `main`, PR to `main`, then sync `dev` |
+
+### Flow
+1. Branch from `dev`: `git checkout dev && git pull && git checkout -b feature/name`
+2. Atomic commits with Conventional Commits: `type(scope): description`
+3. Push and PR to `dev`: `git push -u origin feature/name && gh pr create --base dev`
+4. Squash merge feature → dev
+5. When ready for release: PR `dev` → `main` with merge commit (not squash)
+6. Tag on `main`: `git tag -a vX.Y.Z -m "..."` && `git push origin vX.Y.Z`
+
+### Commit Format
+```
+type(scope): description in English, imperative mood, no period
+```
+Types: `feat`, `fix`, `refactor`, `style`, `docs`, `test`, `chore`, `perf`, `ci`
+
+### Strict Rules
+- NEVER commit directly to `main` or `dev`
+- NEVER force-push to `main`
+- NEVER PR a feature directly to `main` (only hotfix)
+- Squash merge: `feature/*` → `dev`
+- Merge commit: `dev` → `main`
+- One commit = one logical change
