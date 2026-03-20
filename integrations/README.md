@@ -4,22 +4,39 @@ Pre-built integrations for prompt-armor with popular platforms.
 
 ## OpenClaw
 
-Skill for [OpenClaw](https://openclaw.ai) agents. Scans external content for prompt injection before the agent processes it.
+### Plugin (recommended)
 
-**Install via ClawHub:**
+Full plugin with automatic message interception, manual scan tool, and agent-level skill.
+
+```bash
+pip install prompt-armor
+openclaw plugins install @prompt-armor/openclaw-plugin
+```
+
+See [openclaw-plugin/README.md](openclaw-plugin/README.md) for configuration and details.
+
+### Skill (standalone)
+
+Lightweight skill for ClawHub. Teaches the agent to scan external content manually.
+
 ```bash
 clawhub install prompt-armor
 ```
 
-**Manual setup:**
-Copy the `openclaw/` folder to your OpenClaw skills directory.
+See [openclaw/SKILL.md](openclaw/SKILL.md) for documentation.
 
-See [openclaw/SKILL.md](openclaw/SKILL.md) for full documentation.
+## MCP Server
 
-## More Integrations
+Already included in the main package. Run:
 
-Coming soon:
+```bash
+prompt-armor-mcp
+```
+
+Works with Claude Desktop, Cursor, and any MCP-compatible client.
+
+## More Integrations (coming soon)
+
 - LangChain callback handler
 - FastAPI middleware
 - Open WebUI filter
-- MCP server (already included — run `prompt-armor-mcp`)

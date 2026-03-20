@@ -1,0 +1,23 @@
+{
+  "name": "@prompt-armor/openclaw-plugin",
+  "version": "0.2.0",
+  "description": "Prompt injection detection for OpenClaw agents — 4 layers, 93% F1, ~19ms, offline",
+  "main": "./src/index.ts",
+  "openclaw": {
+    "extensions": ["./src/index.ts"]
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prompt-armor/prompt-armor"
+  },
+  "keywords": [
+    "openclaw",
+    "openclaw-plugin",
+    "security",
+    "prompt-injection",
+    "jailbreak",
+    "llm-security",
+    "prompt-armor"
+  ]
+}

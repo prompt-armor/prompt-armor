@@ -1,0 +1,40 @@
+{
+  "id": "prompt-armor",
+  "name": "Prompt Armor",
+  "description": "Detect prompt injection, jailbreaks, and adversarial attacks in every incoming message. 4 parallel analysis layers, 93% F1, ~19ms, runs offline.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "mode": {
+        "type": "string",
+        "enum": ["block", "warn", "log"],
+        "default": "warn",
+        "description": "block=reject attacks, warn=flag but allow, log=silent logging"
+      },
+      "scanExternalOnly": {
+        "type": "boolean",
+        "default": false,
+        "description": "If true, only scans messages containing URLs, file refs, or pasted content"
+      },
+      "timeoutMs": {
+        "type": "number",
+        "default": 5000,
+        "description": "Timeout in ms for prompt-armor analysis"
+      }
+    }
+  },
+  "uiHints": {
+    "mode": {
+      "label": "Detection Mode",
+      "description": "How to handle detected attacks"
+    },
+    "scanExternalOnly": {
+      "label": "Scan External Content Only"
+    },
+    "timeoutMs": {
+      "label": "Analysis Timeout (ms)"
+    }
+  },
+  "skills": ["./skills/prompt-armor"]
+}
