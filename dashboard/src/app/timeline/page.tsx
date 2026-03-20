@@ -66,8 +66,13 @@ export default function TimelinePage() {
                 <XAxis
                   dataKey="hour"
                   tick={{ fontSize: 10, fill: '#1f521f', fontFamily: 'JetBrains Mono' }}
-                  tickFormatter={(v: string) => v.slice(11, 16)}
+                  tickFormatter={(v: string) => {
+                    if (!v) return "";
+                    // Show time portion: "16:00" or "16:10" or just date for >48h
+                    return v.length > 10 ? v.slice(11) : v.slice(5);
+                  }}
                   stroke="#1f521f"
+                  interval="preserveStartEnd"
                 />
                 <YAxis
                   tick={{ fontSize: 10, fill: '#1f521f', fontFamily: 'JetBrains Mono' }}

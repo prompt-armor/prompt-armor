@@ -71,8 +71,8 @@ export function getOverviewStats(): OverviewStats {
       SUM(CASE WHEN decision='block' THEN 1 ELSE 0 END) as block,
       AVG(latency_ms) as avgLatency,
       AVG(risk_score) as avgScore,
-      SUM(CASE WHEN timestamp >= datetime('now', '-1 day') THEN 1 ELSE 0 END) as today,
-      SUM(CASE WHEN decision='block' AND timestamp >= datetime('now', '-1 hours') THEN 1 ELSE 0 END) as blocksLastHour
+      SUM(CASE WHEN timestamp >= datetime('now', 'localtime', '-1 day') THEN 1 ELSE 0 END) as today,
+      SUM(CASE WHEN decision='block' AND timestamp >= datetime('now', 'localtime', '-1 hours') THEN 1 ELSE 0 END) as blocksLastHour
     FROM analyses
   `).get() as {
     total: number; allow: number; warn: number; block: number;
@@ -130,15 +130,27 @@ export function getAnalysisById(id: number): Analysis | undefined {
 
 export function getTimeline(hours = 24): TimelinePoint[] {
   const d = getDb();
+
+  // Adaptive granularity: <12h = 10min buckets, 12-48h = 1h, >48h = 1 day
+  let format: string;
+  if (hours <= 12) {
+    // 10-minute buckets: 2026-03-20 16:10, 2026-03-20 16:20, ...
+    format = "%Y-%m-%d %H:" + "' || (CAST(strftime('%M', timestamp) AS INT) / 10 * 10) || '";
+  } else if (hours <= 48) {
+    format = "%Y-%m-%d %H:00";
+  } else {
+    format = "%Y-%m-%d";
+  }
+
   const rows = d
     .prepare(`
       SELECT
-        strftime('%Y-%m-%d %H:00', timestamp) as hour,
+        strftime('${format}', timestamp) as hour,
         SUM(CASE WHEN decision='allow' THEN 1 ELSE 0 END) as allow,
         SUM(CASE WHEN decision='warn' THEN 1 ELSE 0 END) as warn,
         SUM(CASE WHEN decision='block' THEN 1 ELSE 0 END) as block
       FROM analyses
-      WHERE timestamp >= datetime('now', '-' || ? || ' hours')
+      WHERE timestamp >= datetime('now', 'localtime', '-' || ? || ' hours')
       GROUP BY hour
       ORDER BY hour
     `)
