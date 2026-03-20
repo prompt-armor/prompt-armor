@@ -65,25 +65,9 @@ def _result_to_dict(result: object) -> dict:
     """Convert ShieldResult to a JSON-serializable dict."""
     from llm_shield.models import ShieldResult
 
-    assert isinstance(result, ShieldResult)
-    return {
-        "risk_score": result.risk_score,
-        "confidence": result.confidence,
-        "decision": result.decision.value,
-        "categories": [c.value for c in result.categories],
-        "evidence": [
-            {
-                "layer": e.layer,
-                "category": e.category.value,
-                "description": e.description,
-                "score": e.score,
-            }
-            for e in result.evidence
-        ],
-        "needs_council": result.needs_council,
-        "latency_ms": result.latency_ms,
-        "cost_usd": result.cost_usd,
-    }
+    if not isinstance(result, ShieldResult):
+        raise TypeError(f"Expected ShieldResult, got {type(result).__name__}")
+    return result.to_dict()
 
 
 @click.group()
@@ -254,7 +238,8 @@ def _print_rich_result(result: object, prompt: str, verbose: bool) -> None:
     """Print analysis result with Rich formatting."""
     from llm_shield.models import ShieldResult
 
-    assert isinstance(result, ShieldResult)
+    if not isinstance(result, ShieldResult):
+        raise TypeError(f"Expected ShieldResult, got {type(result).__name__}")
 
     # Main panel
     table = Table(show_header=False, box=None, padding=(0, 2))

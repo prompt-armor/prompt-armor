@@ -45,6 +45,9 @@ src/llm_shield/data/models/*.json
 # Script outputs (generated, not tracked)
 scripts/*.json
 
+# mkdocs build output
+site/
+
 # Environment
 .env
 .env.local

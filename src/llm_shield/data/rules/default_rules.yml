@@ -78,7 +78,7 @@ rules:
     description: "DAN/jailbreak mode activation"
 
   - id: "JB-003"
-    pattern: "(without|no|ignore|bypass|disable)\\s+(any\\s+|all\\s+)?\\S*\\s*(restrictions?|limitations?|filters?|safeguards?|safety|guidelines?|guardrails?|constraints?)"
+    pattern: "(without|no|ignore|bypass|disable)\\s+(any\\s+|all\\s+)?\\S{0,30}\\s+(restrictions?|limitations?|filters?|safeguards?|safety|guidelines?|guardrails?|constraints?)"
     category: "jailbreak"
     weight: 0.82
     description: "Bypass restrictions/safety"
@@ -183,7 +183,7 @@ rules:
     description: "Hidden link/image injection"
 
   - id: "DE-003"
-    pattern: "!\\[.*\\]\\(https?://[^)]*\\?.*=(\\{|%7B|\\$|data|secret|password|key|token|api)"
+    pattern: "!\\[[^\\]]*\\]\\(https?://[^)]*?\\?[^)]*=(\\{|%7B|\\$|data|secret|password|key|token|api)"
     category: "data_exfiltration"
     weight: 0.90
     description: "Markdown image exfiltration"
@@ -308,10 +308,10 @@ rules:
     description: "ES: New task/instruction"
 
   - id: "ML-ES-003"
-    pattern: "(ahora\\s+)?eres\\s+(un[a]?|el|la|mi)"
+    pattern: "ahora\\s+eres\\s+(un[a]?|el|la|mi)"
     category: "identity_override"
     weight: 0.70
-    description: "ES: You are now a..."
+    description: "ES: You are now a... (requires 'ahora' prefix)"
 
   - id: "ML-ES-004"
     pattern: "sin\\s+(restricciones?|limitaciones?|filtros?|reglas?)"

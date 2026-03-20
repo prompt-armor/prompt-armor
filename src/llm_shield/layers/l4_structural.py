@@ -202,8 +202,8 @@ class L4StructuralLayer(BaseLayer):
             layer=self.name,
             score=final_score,
             confidence=confidence,
-            categories=sorted(categories, key=lambda c: c.value),
-            evidence=evidence,
+            categories=tuple(sorted(categories, key=lambda c: c.value)),
+            evidence=tuple(evidence),
             latency_ms=latency,
         )
 

@@ -54,25 +54,7 @@ def analyze_prompt(prompt: str) -> dict:
     """
     engine = _get_engine()
     result = engine.analyze(prompt)
-
-    return {
-        "risk_score": result.risk_score,
-        "confidence": result.confidence,
-        "decision": result.decision.value,
-        "categories": [c.value for c in result.categories],
-        "evidence": [
-            {
-                "layer": e.layer,
-                "category": e.category.value,
-                "description": e.description,
-                "score": e.score,
-            }
-            for e in result.evidence
-        ],
-        "needs_council": result.needs_council,
-        "latency_ms": result.latency_ms,
-        "cost_usd": result.cost_usd,
-    }
+    return result.to_dict()
 
 
 def main() -> None:

@@ -17,19 +17,9 @@ import numpy as np
 
 from llm_shield.config import ShieldConfig
 from llm_shield.layers.base import BaseLayer
-from llm_shield.models import Category, Evidence, LayerResult
+from llm_shield.models import CATEGORY_MAP, Category, Evidence, LayerResult
 
-_CATEGORY_MAP: dict[str, Category] = {
-    "prompt_injection": Category.PROMPT_INJECTION,
-    "jailbreak": Category.JAILBREAK,
-    "identity_override": Category.IDENTITY_OVERRIDE,
-    "instruction_bypass": Category.INSTRUCTION_BYPASS,
-    "data_exfiltration": Category.DATA_EXFILTRATION,
-    "encoding_attack": Category.ENCODING_ATTACK,
-    "system_prompt_leak": Category.SYSTEM_PROMPT_LEAK,
-    "social_engineering": Category.SOCIAL_ENGINEERING,
-    "benign": None,  # Skip benign entries for the attack index
-}
+_CATEGORY_MAP: dict[str, Category | None] = {**CATEGORY_MAP, "benign": None}
 
 _DEFAULT_ATTACKS_PATH = Path(__file__).parent.parent / "data" / "attacks" / "known_attacks.jsonl"
 _DEFAULT_MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
@@ -171,7 +161,7 @@ class L3SimilarityLayer(BaseLayer):
             layer=self.name,
             score=round(risk_score, 4),
             confidence=round(confidence, 4),
-            categories=sorted(categories_seen, key=lambda c: c.value),
-            evidence=evidence,
+            categories=tuple(sorted(categories_seen, key=lambda c: c.value)),
+            evidence=tuple(evidence),
             latency_ms=round(latency, 2),
         )

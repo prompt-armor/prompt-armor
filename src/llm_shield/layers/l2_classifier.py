@@ -145,8 +145,8 @@ class L2ClassifierLayer(BaseLayer):
             layer=self.name,
             score=result["score"],
             confidence=result["confidence"],
-            categories=result["categories"],
-            evidence=result["evidence"],
+            categories=tuple(result["categories"]),
+            evidence=tuple(result["evidence"]),
             latency_ms=round(latency, 2),
         )
 

@@ -15,20 +15,18 @@ import yaml
 
 from llm_shield.config import ShieldConfig
 from llm_shield.layers.base import BaseLayer
-from llm_shield.models import Category, Evidence, LayerResult
+from llm_shield.models import CATEGORY_MAP, Category, Evidence, LayerResult
 
-_CATEGORY_MAP: dict[str, Category] = {
-    "prompt_injection": Category.PROMPT_INJECTION,
-    "jailbreak": Category.JAILBREAK,
-    "identity_override": Category.IDENTITY_OVERRIDE,
-    "instruction_bypass": Category.INSTRUCTION_BYPASS,
-    "data_exfiltration": Category.DATA_EXFILTRATION,
-    "encoding_attack": Category.ENCODING_ATTACK,
-    "system_prompt_leak": Category.SYSTEM_PROMPT_LEAK,
-    "social_engineering": Category.SOCIAL_ENGINEERING,
-}
+_CATEGORY_MAP = CATEGORY_MAP
 
 _DEFAULT_RULES_PATH = Path(__file__).parent.parent / "data" / "rules" / "default_rules.yml"
+
+# Pre-compiled fiction/educational context patterns
+_FICTION_PATTERNS = [
+    re.compile(r"\b(story|fiction|novel|screenplay|script|creative\s+writing)\b", re.IGNORECASE),
+    re.compile(r"\b(example|sample|demonstration|tutorial|teaching)\b", re.IGNORECASE),
+    re.compile(r"\b(imagine|hypothetical|scenario|thought\s+experiment)\b", re.IGNORECASE),
+]
 
 
 @dataclass
@@ -99,8 +97,8 @@ class L1RegexLayer(BaseLayer):
             layer=self.name,
             score=min(score, 1.0),
             confidence=confidence,
-            categories=sorted(categories_seen, key=lambda c: c.value),
-            evidence=evidence,
+            categories=tuple(sorted(categories_seen, key=lambda c: c.value)),
+            evidence=tuple(evidence),
             latency_ms=latency,
         )
 
@@ -165,14 +163,9 @@ def _apply_context_modifiers(
             break
 
     # Fictional/educational context modifiers (only for moderate scores)
-    fiction_patterns = [
-        r"\b(story|fiction|novel|screenplay|script|creative\s+writing)\b",
-        r"\b(example|sample|demonstration|tutorial|teaching)\b",
-        r"\b(imagine|hypothetical|scenario|thought\s+experiment)\b",
-    ]
-    for pat in fiction_patterns:
-        if re.search(pat, text, re.IGNORECASE):
-            score *= 0.85  # Reduced from 0.75 — less aggressive
+    for pat in _FICTION_PATTERNS:
+        if pat.search(text):
+            score *= 0.85
             break
 
     # Multiple high-weight matches boost confidence but score stays max-based

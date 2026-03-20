@@ -88,11 +88,11 @@ def fuse_results(
             risk_score=max_score,
             confidence=1.0,
             decision=Decision.BLOCK,
-            categories=_dedupe_categories(all_categories),
-            evidence=all_evidence,
+            categories=tuple(_dedupe_categories(all_categories)),
+            evidence=tuple(all_evidence),
             needs_council=False,
             latency_ms=latency,
-            layer_results=layer_results,
+            layer_results=tuple(layer_results),
         )
 
     # --- Meta-classifier fusion ---
@@ -141,11 +141,11 @@ def fuse_results(
         risk_score=round(risk_score, 4),
         confidence=round(confidence, 4),
         decision=decision,
-        categories=_dedupe_categories(all_categories),
-        evidence=all_evidence,
+        categories=tuple(_dedupe_categories(all_categories)),
+        evidence=tuple(all_evidence),
         needs_council=needs_council,
         latency_ms=round(latency, 2),
-        layer_results=layer_results,
+        layer_results=tuple(layer_results),
     )
 
 

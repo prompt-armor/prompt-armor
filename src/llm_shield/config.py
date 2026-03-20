@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class LayerWeights(BaseModel):
@@ -35,6 +35,17 @@ class ShieldConfig(BaseModel):
     divergence_penalty: float = Field(default=0.15, ge=0.0, le=1.0)
     rules_path: Path | None = None
     attacks_path: Path | None = None
+
+    @field_validator("rules_path", "attacks_path", mode="before")
+    @classmethod
+    def _validate_paths(cls, v: str | Path | None) -> Path | None:
+        """Reject path traversal attempts."""
+        if v is None:
+            return None
+        p = Path(v)
+        if ".." in p.parts:
+            raise ValueError(f"Path traversal not allowed: {v}")
+        return p
 
 
 _CONFIG_FILENAMES = [".llm-shield.yml", ".llm-shield.yaml"]

@@ -71,8 +71,8 @@ class TestLayerResult:
         result = LayerResult(layer="l1_regex", score=0.8, confidence=0.9)
         assert result.layer == "l1_regex"
         assert result.score == 0.8
-        assert result.categories == []
-        assert result.evidence == []
+        assert result.categories == ()
+        assert result.evidence == ()
 
     def test_with_evidence(self) -> None:
         ev = Evidence(

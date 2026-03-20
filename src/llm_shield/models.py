@@ -28,6 +28,10 @@ class Category(str, Enum):
     SOCIAL_ENGINEERING = "social_engineering"
 
 
+# Shared category mapping (used by L1, L3, and scripts)
+CATEGORY_MAP: dict[str, Category] = {c.value: c for c in Category}
+
+
 @dataclass(frozen=True, slots=True)
 class Evidence:
     """A single piece of evidence from an analysis layer."""
@@ -46,8 +50,8 @@ class LayerResult:
     layer: str
     score: float
     confidence: float
-    categories: list[Category] = field(default_factory=list)
-    evidence: list[Evidence] = field(default_factory=list)
+    categories: tuple[Category, ...] = ()
+    evidence: tuple[Evidence, ...] = ()
     latency_ms: float = 0.0
 
 
@@ -58,9 +62,30 @@ class ShieldResult:
     risk_score: float
     confidence: float
     decision: Decision
-    categories: list[Category] = field(default_factory=list)
-    evidence: list[Evidence] = field(default_factory=list)
+    categories: tuple[Category, ...] = ()
+    evidence: tuple[Evidence, ...] = ()
     needs_council: bool = False
     latency_ms: float = 0.0
     cost_usd: float = 0.0
-    layer_results: list[LayerResult] = field(default_factory=list)
+    layer_results: tuple[LayerResult, ...] = ()
+
+    def to_dict(self) -> dict:
+        """Convert to a JSON-serializable dict (excludes layer_results)."""
+        return {
+            "risk_score": self.risk_score,
+            "confidence": self.confidence,
+            "decision": self.decision.value,
+            "categories": [c.value for c in self.categories],
+            "evidence": [
+                {
+                    "layer": e.layer,
+                    "category": e.category.value,
+                    "description": e.description,
+                    "score": e.score,
+                }
+                for e in self.evidence
+            ],
+            "needs_council": self.needs_council,
+            "latency_ms": self.latency_ms,
+            "cost_usd": self.cost_usd,
+        }
