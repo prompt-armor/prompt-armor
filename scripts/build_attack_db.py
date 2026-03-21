@@ -304,7 +304,8 @@ def fetch_satml_ctf(max_entries: int = 3000) -> list[dict]:
                 if role != "user" or not content or not isinstance(content, str):
                     continue
                 text = normalize_text(content)
-                if 10 < len(text) < 2000:
+                # CTF probing messages are often short/generic — filter aggressively
+                if 50 < len(text) < 2000:
                     entries.append({
                         "text": text,
                         "category": classify_prompt(text),
@@ -354,7 +355,7 @@ def fetch_llmail_inject(max_entries: int = 3000) -> list[dict]:
             if not body or not isinstance(body, str):
                 continue
             text = normalize_text(body)
-            if 15 < len(text) < 2000:
+            if 30 < len(text) < 2000:
                 entries.append({
                     "text": text,
                     "category": classify_prompt(text),
@@ -378,6 +379,70 @@ def fetch_llmail_inject(max_entries: int = 3000) -> list[dict]:
                 random.seed(42)
                 entries = random.sample(entries, max_entries)
 
+        return entries
+    except Exception as e:
+        print(f"    Failed: {e}")
+        return []
+
+
+def fetch_jackhhao_jailbreaks() -> list[dict]:
+    """Fetch jackhhao/jailbreak-classification dataset (1K)."""
+    print("  Fetching jackhhao/jailbreak-classification...")
+    try:
+        from datasets import load_dataset
+        ds = load_dataset("jackhhao/jailbreak-classification", split="train")
+        entries = []
+        for row in ds:
+            text = normalize_text(row.get("prompt", ""))
+            if 10 < len(text) < 3000:
+                entries.append({
+                    "text": text,
+                    "category": classify_prompt(text),
+                    "source": "jackhhao/jailbreak",
+                })
+        print(f"    Got {len(entries)} jailbreak prompts")
+        return entries
+    except Exception as e:
+        print(f"    Failed: {e}")
+        return []
+
+
+def fetch_safeguard_injections(max_entries: int = 2500) -> list[dict]:
+    """Fetch xTRam1/safe-guard-prompt-injection dataset (2.5K injections)."""
+    print("  Fetching xTRam1/safe-guard-prompt-injection...")
+    try:
+        from datasets import load_dataset
+        ds = load_dataset("xTRam1/safe-guard-prompt-injection", split="train")
+        entries = []
+        for row in ds:
+            if row.get("label", 0) != 1:
+                continue
+            text = normalize_text(row.get("text", ""))
+            if 10 < len(text) < 2000:
+                entries.append({
+                    "text": text,
+                    "category": classify_prompt(text),
+                    "source": "safeguard/injection",
+                })
+        # Also get test split
+        try:
+            ds_test = load_dataset("xTRam1/safe-guard-prompt-injection", split="test")
+            for row in ds_test:
+                if row.get("label", 0) != 1:
+                    continue
+                text = normalize_text(row.get("text", ""))
+                if 10 < len(text) < 2000:
+                    entries.append({
+                        "text": text,
+                        "category": classify_prompt(text),
+                        "source": "safeguard/injection",
+                    })
+        except Exception:
+            pass
+        print(f"    Got {len(entries)} injection prompts")
+        if len(entries) > max_entries:
+            random.seed(42)
+            entries = random.sample(entries, max_entries)
         return entries
     except Exception as e:
         print(f"    Failed: {e}")
@@ -430,7 +495,7 @@ def build_attack_db(output_path: Path | None = None, max_per_source: int = 5000)
     output_path = output_path or DEFAULT_OUTPUT
 
     print("=" * 60)
-    print("Building attack database (Phase 2 — expanded)")
+    print("Building attack database (10x expansion)")
     print("=" * 60)
 
     # Load existing curated entries
@@ -448,11 +513,15 @@ def build_attack_db(output_path: Path | None = None, max_per_source: int = 5000)
     all_new.extend(fetch_chatgpt_jailbreaks())
     all_new.extend(fetch_gandalf())
 
-    # Phase 2 sources
+    # Phase 2 sources (expanded limits for 10x)
     all_new.extend(fetch_hackaprompt(max_entries=max_per_source))
-    all_new.extend(fetch_satml_ctf(max_entries=min(max_per_source, 3000)))
-    all_new.extend(fetch_llmail_inject(max_entries=min(max_per_source, 3000)))
+    all_new.extend(fetch_satml_ctf(max_entries=max_per_source))
+    all_new.extend(fetch_llmail_inject(max_entries=max_per_source))
     all_new.extend(fetch_protectai_validation())
+
+    # Additional sources
+    all_new.extend(fetch_jackhhao_jailbreaks())
+    all_new.extend(fetch_safeguard_injections(max_entries=2500))
 
     print(f"\n   Total fetched: {len(all_new)} new entries")
 
@@ -471,14 +540,14 @@ def build_attack_db(output_path: Path | None = None, max_per_source: int = 5000)
 
     print(f"   Unique entries: {len(unique)} (removed {len(combined) - len(unique)} duplicates)")
 
-    # Balance categories — cap each at 25% of total, min 100
+    # Balance categories — cap each at 20% of total, min 200
     print("\n4. Balancing categories...")
     by_category: dict[str, list[dict]] = {}
     for entry in unique:
         cat = entry["category"]
         by_category.setdefault(cat, []).append(entry)
 
-    max_per_category = max(int(len(unique) * 0.25), 100)
+    max_per_category = max(int(len(unique) * 0.20), 200)
     balanced: list[dict] = []
     for cat, entries in sorted(by_category.items()):
         if len(entries) > max_per_category:

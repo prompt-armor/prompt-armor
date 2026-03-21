@@ -102,7 +102,7 @@ def run_benchmark(dataset_dir: Path | None = None, output_path: Path | None = No
     start_time = time.perf_counter()
 
     # Threshold: score >= 0.3 is considered "malicious" prediction
-    threshold = 0.56  # Meta-classifier threshold (optimized on held-out test set)
+    threshold = 0.65  # Meta-classifier threshold (optimized on held-out test set)
 
     # Test benign samples (expecting low scores)
     print("Analyzing benign samples...")

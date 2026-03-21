@@ -100,8 +100,20 @@ class L3SimilarityLayer(BaseLayer):
 
         # Build FAISS index (inner product on normalized vectors = cosine similarity)
         dim = embeddings.shape[1]
-        self._index = faiss.IndexFlatIP(dim)
-        self._index.add(embeddings)
+        n_vectors = embeddings.shape[0]
+
+        # Use IVF index for large databases (>10K) — O(sqrt(n)) search
+        # Falls back to flat index for small databases
+        if n_vectors >= 10_000:
+            n_clusters = min(int(np.sqrt(n_vectors)), 256)
+            quantizer = faiss.IndexFlatIP(dim)
+            self._index = faiss.IndexIVFFlat(quantizer, dim, n_clusters, faiss.METRIC_INNER_PRODUCT)
+            self._index.train(embeddings)
+            self._index.add(embeddings)
+            self._index.nprobe = min(16, n_clusters)  # search 16 clusters at query time
+        else:
+            self._index = faiss.IndexFlatIP(dim)
+            self._index.add(embeddings)
 
     def analyze(self, text: str) -> LayerResult:
         """Compare prompt against known attacks via cosine similarity."""

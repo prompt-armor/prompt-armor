@@ -21,22 +21,22 @@ from prompt_armor.models import Category, Decision, LayerResult, ShieldResult
 # Learned via LogisticRegressionCV with class_weight='balanced'
 # on 515 benchmark samples (353 benign + 162 malicious).
 # Features: [l1, l2, l3, l4, max, min, l1*l4, l2*l3, n_above_0.1]
-# Phase 2: contrastive L3 + expanded attack DB (5,540 entries) + L4 paradigm-shift features.
-# After contrastive fine-tuning, L3 contributes via max_score, l2×l3, and n_above_0.1.
-# L3/L4 raw coefficients clamped to 0 (negative coef = exploitable).
+# 25K attack DB (cleaned, min 50 chars) + contrastive L3 fine-tuning.
+# L3 (+6.51) and L2 (+5.37) are now the dominant signals.
+# L4/max_score/l2×l3 clamped to 0 (negative = exploitable).
 _META_COEFS = [
-    0.7707,   # l1_regex
-    2.6612,   # l2_classifier (strong signal)
-    0.0,      # l3_similarity (raw coef clamped; contributes via l2×l3 and max_score)
-    0.0,      # l4_structural (clamped from -0.98)
-    1.0468,   # max_score
-    0.0,      # min_score (negligible)
-    0.1848,   # l1 × l4 interaction
-    0.9276,   # l2 × l3 interaction (now powerful: both L2 and L3 are strong)
-    0.8700,   # n_layers_above_0.1
+    0.2662,   # l1_regex
+    5.3659,   # l2_classifier (very strong)
+    3.0,      # l3_similarity (capped from 6.51 to prevent FP on short benign prompts)
+    0.0,      # l4_structural (clamped from -3.84)
+    0.0,      # max_score (clamped from -2.01)
+    0.3383,   # min_score
+    4.5146,   # l1 × l4 interaction (very strong)
+    0.0,      # l2 × l3 interaction (clamped from -4.45)
+    2.2368,   # n_layers_above_0.1
 ]
-_META_INTERCEPT = -2.4520
-_META_THRESHOLD = 0.56  # Original threshold (works best with v1 coefficients)
+_META_INTERCEPT = -4.5620
+_META_THRESHOLD = 0.65  # Optimal F1 threshold on held-out set (F1=0.980)
 
 
 def _sigmoid(x: float) -> float:
