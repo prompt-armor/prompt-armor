@@ -22,6 +22,7 @@ from prompt_armor.models import CATEGORY_MAP, Category, Evidence, LayerResult
 _CATEGORY_MAP: dict[str, Category | None] = {**CATEGORY_MAP, "benign": None}
 
 _DEFAULT_ATTACKS_PATH = Path(__file__).parent.parent / "data" / "attacks" / "known_attacks.jsonl"
+_CONTRASTIVE_MODEL_PATH = Path(__file__).parent.parent / "data" / "models" / "l3-contrastive"
 _DEFAULT_MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
 
 # Similarity thresholds
@@ -57,11 +58,14 @@ class L3SimilarityLayer(BaseLayer):
 
         from sentence_transformers import SentenceTransformer
 
-        # Redirect stdout to suppress tqdm/torch load reports
+        # Use contrastive-finetuned model if available, else base model
         old_stdout = sys.stdout
         sys.stdout = io.StringIO()
         try:
-            self._model = SentenceTransformer(_DEFAULT_MODEL_NAME)
+            if _CONTRASTIVE_MODEL_PATH.exists():
+                self._model = SentenceTransformer(str(_CONTRASTIVE_MODEL_PATH))
+            else:
+                self._model = SentenceTransformer(_DEFAULT_MODEL_NAME)
         finally:
             sys.stdout = old_stdout
 
