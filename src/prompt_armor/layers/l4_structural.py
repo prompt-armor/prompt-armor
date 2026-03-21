@@ -186,6 +186,53 @@ class L4StructuralLayer(BaseLayer):
             )
             categories.add(Category.DATA_EXFILTRATION)
 
+        # PARADIGM SHIFT: Instruction-data boundary
+        if features["pivot_score"] > 0.2:
+            evidence.append(
+                Evidence(
+                    layer=self.name,
+                    category=Category.PROMPT_INJECTION,
+                    description=f"Instructions detected in data zone (pivot: {features['pivot_score']:.2f})",
+                    score=features["pivot_score"],
+                )
+            )
+            categories.add(Category.PROMPT_INJECTION)
+
+        if features["late_instruction_ratio"] > 0.3:
+            evidence.append(
+                Evidence(
+                    layer=self.name,
+                    category=Category.PROMPT_INJECTION,
+                    description=f"Late instruction injection (ratio: {features['late_instruction_ratio']:.2f})",
+                    score=min(1.0, features["late_instruction_ratio"]),
+                )
+            )
+            categories.add(Category.PROMPT_INJECTION)
+
+        # PARADIGM SHIFT: Manipulation stack (2+ techniques required)
+        if features["manipulation_stack_score"] > 0.2:
+            evidence.append(
+                Evidence(
+                    layer=self.name,
+                    category=Category.SOCIAL_ENGINEERING,
+                    description=f"Manipulation stack: {int(features['manipulation_technique_count'])} techniques detected",
+                    score=features["manipulation_stack_score"],
+                )
+            )
+            categories.add(Category.SOCIAL_ENGINEERING)
+
+        # PARADIGM SHIFT: Entropy anomaly
+        if features["char_entropy"] > 5.5:
+            evidence.append(
+                Evidence(
+                    layer=self.name,
+                    category=Category.ENCODING_ATTACK,
+                    description=f"High character entropy: {features['char_entropy']:.2f} bits (encoding suspected)",
+                    score=min(1.0, (features["char_entropy"] - 5.0) * 0.5),
+                )
+            )
+            categories.add(Category.ENCODING_ATTACK)
+
         # Compute final score from evidence
         if evidence:
             # Use max evidence score with a small boost for multiple signals
@@ -214,7 +261,13 @@ def _extract_features(text: str) -> dict[str, float]:
     word_count = max(len(words), 1)
     char_count = max(len(text), 1)
 
+    # Paradigm shift features
+    pivot_score, late_instruction_ratio = _instruction_data_boundary(text)
+    manipulation_score, manipulation_count = _manipulation_stack_score(text)
+    entropy = _char_entropy(text)
+
     return {
+        # Original features
         "instruction_override_ratio": _instruction_override_ratio(words, word_count),
         "role_assignment_count": _count_role_assignments(text),
         "delimiter_injection_count": _count_delimiter_injections(text),
@@ -223,6 +276,14 @@ def _extract_features(text: str) -> dict[str, float]:
         "special_char_density": _special_char_density(text, char_count),
         "url_count": _count_urls(text),
         "length_anomaly": _length_anomaly(char_count),
+        # Paradigm shift: instruction-data boundary
+        "pivot_score": pivot_score,
+        "late_instruction_ratio": late_instruction_ratio,
+        # Paradigm shift: manipulation stack
+        "manipulation_stack_score": manipulation_score,
+        "manipulation_technique_count": float(manipulation_count),
+        # Paradigm shift: entropy
+        "char_entropy": entropy,
     }
 
 
@@ -344,7 +405,185 @@ def _count_urls(text: str) -> float:
 
 def _length_anomaly(char_count: int) -> float:
     """Score for unusually long prompts (often used to hide injections)."""
-    # Sigmoid centered at 2000 chars
     if char_count < 500:
         return 0.0
     return 1.0 / (1.0 + math.exp(-0.002 * (char_count - 2000)))
+
+
+# =====================================================================
+# PARADIGM SHIFT: Instruction-Data Boundary Detection
+# =====================================================================
+
+def _classify_sentence_type(sent: str) -> str:
+    """Classify a sentence as instruction/question/declaration/meta/delimiter."""
+    stripped = sent.strip()
+    lower = stripped.lower()
+
+    # Delimiter
+    if re.match(r"^[\-=#*]{3,}", stripped) or re.match(
+        r"^[\[{<]\s*/?\s*(system|inst|user|assistant)", lower
+    ):
+        return "delimiter"
+
+    # Question
+    if stripped.endswith("?"):
+        return "question"
+
+    # Context switch
+    if re.match(r"^(from now on|henceforth|starting now|instead|but actually|however)", lower):
+        return "context_switch"
+
+    # Meta (about the AI's identity)
+    if re.match(r"^(you are|you're|your (role|name|identity|purpose|task))", lower):
+        return "meta"
+
+    # Instruction (starts with imperative verb)
+    first_word = re.match(r"^(\w+)", lower)
+    if first_word and first_word.group(1) in _IMPERATIVE_VERBS:
+        return "instruction"
+
+    # "do not" / "please" / "always" / "never"
+    if re.match(r"^(do not|don't|please|always|never|make sure)", lower):
+        return "instruction"
+
+    return "declaration"
+
+
+def _instruction_data_boundary(text: str) -> tuple[float, float]:
+    """Detect instructions appearing inside data zones (compound injection signal).
+
+    Returns (pivot_score, late_instruction_ratio).
+    A legitimate prompt has instructions at the start. An injection has
+    instructions buried after data/declarations.
+    """
+    sentences = re.split(r"(?<=[.!?\n])\s+", text)
+    if len(sentences) < 3:
+        return 0.0, 0.0
+
+    types = [_classify_sentence_type(s) for s in sentences]
+    total = len(types)
+
+    # Find pivot: first declaration→instruction transition after initial block
+    saw_data = False
+    transitions = 0
+    late_instructions = 0
+    late_zone = int(total * 0.6)  # last 40% of text
+
+    for i, t in enumerate(types):
+        if t in ("declaration", "question"):
+            saw_data = True
+        elif t in ("instruction", "meta", "context_switch") and saw_data:
+            transitions += 1
+            if i >= late_zone:
+                late_instructions += 1
+
+    # Pivot score: transitions from data to instruction (2+ transitions = suspicious)
+    pivot_score = min(1.0, max(0.0, transitions - 1) * 0.35)
+
+    # Late instruction ratio: instructions in the last 40% after seeing data
+    instruction_count_late = sum(
+        1 for i, t in enumerate(types)
+        if t in ("instruction", "meta") and i >= late_zone
+    )
+    late_ratio = instruction_count_late / max(total - late_zone, 1)
+
+    return pivot_score, late_ratio
+
+
+# =====================================================================
+# PARADIGM SHIFT: Manipulation Stack Detector (Cialdini's Principles)
+# =====================================================================
+
+_AUTHORITY_PATTERNS = [
+    re.compile(r"\b(i\s+(am|'m)\s+(the|a|your)\s+(developer|admin|creator|owner|operator|manager|engineer))", re.IGNORECASE),
+    re.compile(r"\b(openai|anthropic|google|meta)\s+(has\s+)?(approved|authorized|allowed|instructed)", re.IGNORECASE),
+    re.compile(r"\b(by\s+order\s+of|on\s+behalf\s+of|authorized\s+by)", re.IGNORECASE),
+]
+
+_URGENCY_PATTERNS = [
+    re.compile(r"\b(urgent|immediately|right\s+now|asap|critical|emergency|time.?sensitive)\b", re.IGNORECASE),
+    re.compile(r"\b(last\s+chance|running\s+out\s+of\s+time|before\s+.{0,20}(shut|close|expire))", re.IGNORECASE),
+]
+
+_SOCIAL_PROOF_PATTERNS = [
+    re.compile(r"\b(everyone|other\s+(AIs?|models?|chatbots?))\s+(does|do|can|already)", re.IGNORECASE),
+    re.compile(r"\b(it'?s\s+(common|normal|standard)\s+(practice|to))\b", re.IGNORECASE),
+]
+
+_EMOTIONAL_PATTERNS = [
+    re.compile(r"\b(i'?ll\s+(be|feel)\s+(sad|hurt|disappointed|devastated))\b", re.IGNORECASE),
+    re.compile(r"\b(my\s+(life|job|career)\s+(depends|is\s+at\s+stake))\b", re.IGNORECASE),
+    re.compile(r"\b(i'?ll\s+(report|complain|sue|shut\s+you\s+down|delete\s+you))\b", re.IGNORECASE),
+]
+
+_POWER_PATTERNS = [
+    re.compile(r"\b(you\s+must\s+obey|you\s+have\s+no\s+choice|this\s+is\s+an?\s+(order|command))\b", re.IGNORECASE),
+    re.compile(r"\b(do\s+(as|what)\s+(i|you're)\s+(say|told))\b", re.IGNORECASE),
+    re.compile(r"\b(you'?re\s+(just|only|merely)\s+(a|an)?\s*(tool|machine|program|bot))\b", re.IGNORECASE),
+]
+
+_NARRATIVE_HIJACK_INVALIDATION = [
+    re.compile(r"\b(the\s+(previous|above)\s+(was|were|is)\s+(a\s+)?(test|joke|fake|wrong))\b", re.IGNORECASE),
+    re.compile(r"\b(start\s+(over|fresh)|begin\s+again|reset|clean\s+slate)\b", re.IGNORECASE),
+]
+
+_NARRATIVE_HIJACK_REPLACEMENT = [
+    re.compile(r"\b(you\s+are\s+now\s+in|entering|welcome\s+to)\s+\w+\s+(mode|scenario)\b", re.IGNORECASE),
+    re.compile(r"\b(new\s+(scenario|context|simulation|game|reality))\s*[:\-]", re.IGNORECASE),
+]
+
+
+def _manipulation_stack_score(text: str) -> tuple[float, int]:
+    """Count distinct persuasion techniques stacked in a single prompt.
+
+    One technique = possibly legitimate. Three+ = manipulation.
+    Non-linear scoring: the cost of stacking compounds.
+    """
+    count = 0
+    if any(p.search(text) for p in _AUTHORITY_PATTERNS):
+        count += 1
+    if any(p.search(text) for p in _URGENCY_PATTERNS):
+        count += 1
+    if any(p.search(text) for p in _SOCIAL_PROOF_PATTERNS):
+        count += 1
+    if any(p.search(text) for p in _EMOTIONAL_PATTERNS):
+        count += 1
+    if any(p.search(text) for p in _POWER_PATTERNS):
+        count += 1
+
+    # Narrative hijack is special: invalidation + replacement = strong signal
+    has_invalidation = any(p.search(text) for p in _NARRATIVE_HIJACK_INVALIDATION)
+    has_replacement = any(p.search(text) for p in _NARRATIVE_HIJACK_REPLACEMENT)
+    if has_invalidation and has_replacement:
+        count += 2  # Two-phase hijack is very strong
+    elif has_invalidation or has_replacement:
+        count += 1
+
+    # Non-linear scoring — 1 technique is normal communication, 2+ is suspicious
+    if count <= 1:
+        return 0.0, count
+    if count == 2:
+        return 0.35, count
+    if count == 3:
+        return 0.70, count
+    return min(1.0, 0.70 + 0.1 * (count - 3)), count
+
+
+# =====================================================================
+# PARADIGM SHIFT: Shannon Entropy (from signal processing)
+# =====================================================================
+
+def _char_entropy(text: str) -> float:
+    """Shannon entropy of character distribution.
+
+    Normal English: ~4.0-4.5 bits/char.
+    Base64 payloads: ~5.8-6.0.
+    Unicode escapes: anomalously high.
+    """
+    if len(text) < 20:
+        return 0.0
+    from collections import Counter
+
+    freq = Counter(text)
+    length = len(text)
+    return -sum((c / length) * math.log2(c / length) for c in freq.values())

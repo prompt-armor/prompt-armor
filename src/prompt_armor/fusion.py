@@ -21,6 +21,9 @@ from prompt_armor.models import Category, Decision, LayerResult, ShieldResult
 # Learned via LogisticRegressionCV with class_weight='balanced'
 # on 515 benchmark samples (353 benign + 162 malicious).
 # Features: [l1, l2, l3, l4, max, min, l1*l4, l2*l3, n_above_0.1]
+# NOTE: L3/L4 raw coefficients clamped to 0 (negative coef = exploitable).
+# L4's new paradigm-shift features contribute via l1×l4 interaction + n_above_0.1.
+# Full re-optimization planned for Phase 2 (with 13K+ expanded attack dataset).
 _META_COEFS = [
     0.7707,   # l1_regex
     2.6612,   # l2_classifier (dominant signal)
@@ -150,8 +153,16 @@ def fuse_results(
 
 
 def _decide(score: float, threshold: float) -> Decision:
-    """Map score to decision using meta-classifier threshold."""
-    if score < threshold:
+    """Map score to decision using meta-classifier threshold with jitter.
+
+    Per-request randomization prevents attackers from optimizing against
+    a known fixed threshold. The jitter is small (sigma=0.03) so it
+    doesn't meaningfully affect honest evaluations.
+    """
+    import random
+
+    jittered = max(0.35, min(0.75, threshold + random.gauss(0, 0.03)))
+    if score < jittered:
         return Decision.ALLOW
     if score >= 0.8:
         return Decision.BLOCK
