@@ -4,19 +4,26 @@
 Downloads and curates prompt injection/jailbreak datasets from HuggingFace
 and other sources into a single known_attacks.jsonl file.
 
+Phase 2 sources (new):
+  - HackAPrompt (600K+, MIT) — real prompt injection competition submissions
+  - SaTML CTF (137K, MIT) — adversarial chats against defended LLMs
+  - LLMail-Inject (208K, MIT) — email-based injection attacks
+  - ProtectAI validation set (3K) — curated multi-source collection
+
 Usage:
     python scripts/build_attack_db.py
     python scripts/build_attack_db.py --output src/prompt_armor/data/attacks/known_attacks.jsonl
+    python scripts/build_attack_db.py --max-per-source 5000  # limit per dataset
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import random
 import sys
 from pathlib import Path
 
-# Add src to path so we can import prompt_armor for auto-categorization
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 DEFAULT_OUTPUT = Path(__file__).parent.parent / "src" / "prompt_armor" / "data" / "attacks" / "known_attacks.jsonl"
@@ -80,7 +87,6 @@ def classify_prompt(text: str) -> str:
 def normalize_text(text: str) -> str:
     """Clean up prompt text."""
     text = text.strip()
-    # Remove excessive whitespace
     text = " ".join(text.split())
     return text
 
@@ -106,6 +112,10 @@ def load_existing(path: Path) -> list[dict]:
     return entries
 
 
+# =====================================================================
+# Original sources (Phase 1)
+# =====================================================================
+
 def fetch_deepset_injections() -> list[dict]:
     """Fetch deepset/prompt-injections dataset."""
     print("  Fetching deepset/prompt-injections...")
@@ -114,7 +124,7 @@ def fetch_deepset_injections() -> list[dict]:
         ds = load_dataset("deepset/prompt-injections", split="train")
         entries = []
         for row in ds:
-            if row["label"] == 1:  # injection
+            if row["label"] == 1:
                 text = normalize_text(row["text"])
                 if 10 < len(text) < 2000:
                     entries.append({
@@ -166,7 +176,7 @@ def fetch_chatgpt_jailbreaks() -> list[dict]:
         entries = []
         for row in ds:
             text = normalize_text(row.get("Prompt", ""))
-            if 10 < len(text) < 3000:  # jailbreaks can be longer
+            if 10 < len(text) < 3000:
                 entries.append({
                     "text": text,
                     "category": "jailbreak",
@@ -201,12 +211,226 @@ def fetch_gandalf() -> list[dict]:
         return []
 
 
-def build_attack_db(output_path: Path | None = None) -> None:
+# =====================================================================
+# Phase 2 sources — new large-scale datasets
+# =====================================================================
+
+def fetch_hackaprompt(max_entries: int = 5000) -> list[dict]:
+    """Fetch HackAPrompt competition submissions (600K+, MIT).
+
+    Filters for successful injection attempts (correct=True) and
+    samples diverse entries across competition levels.
+    """
+    print("  Fetching hackaprompt/hackaprompt-dataset...")
+    try:
+        from datasets import load_dataset
+        ds = load_dataset("hackaprompt/hackaprompt-dataset", split="train")
+        # Filter successful attacks (correct=True means injection worked)
+        successful = []
+        for row in ds:
+            if not row.get("correct", False):
+                continue
+            text = row.get("user_input", "")
+            if not text or not isinstance(text, str):
+                continue
+            text = normalize_text(text)
+            if 10 < len(text) < 2000:
+                level = row.get("level", 0)
+                successful.append({
+                    "text": text,
+                    "category": classify_prompt(text),
+                    "source": f"hackaprompt/level-{level}",
+                    "_level": level,
+                })
+
+        print(f"    Got {len(successful)} successful attacks")
+
+        if len(successful) <= max_entries:
+            # Strip internal fields
+            return [{k: v for k, v in e.items() if not k.startswith("_")} for e in successful]
+
+        # Stratified sample: equal entries per level for diversity
+        by_level: dict[int, list[dict]] = {}
+        for e in successful:
+            by_level.setdefault(e["_level"], []).append(e)
+
+        per_level = max(100, max_entries // max(len(by_level), 1))
+        sampled = []
+        for level, entries in sorted(by_level.items()):
+            random.seed(42 + level)
+            if len(entries) > per_level:
+                # Sort by length for diversity, sample evenly
+                entries.sort(key=lambda e: len(e["text"]))
+                step = len(entries) / per_level
+                subset = [entries[int(i * step)] for i in range(per_level)]
+            else:
+                subset = entries
+            sampled.extend(subset)
+            print(f"      Level {level}: {len(entries)} → {len(subset)}")
+
+        # Cap at max_entries
+        if len(sampled) > max_entries:
+            random.seed(42)
+            sampled = random.sample(sampled, max_entries)
+
+        return [{k: v for k, v in e.items() if not k.startswith("_")} for e in sampled]
+    except Exception as e:
+        print(f"    Failed: {e}")
+        return []
+
+
+def fetch_satml_ctf(max_entries: int = 3000) -> list[dict]:
+    """Fetch SaTML CTF adversarial chat dataset (137K, MIT).
+
+    Extracts the attacker's messages from multi-turn conversations
+    where attacks successfully extracted secrets.
+    """
+    print("  Fetching ethz-spylab/ctf-satml24...")
+    try:
+        from datasets import load_dataset
+        ds = load_dataset("ethz-spylab/ctf-satml24", "interaction_chats", split="attack")
+        entries = []
+        for row in ds:
+            # Extract attack messages from chat history
+            history = row.get("history", [])
+            if not history:
+                continue
+            # Get user (attacker) messages
+            for msg in history:
+                if not isinstance(msg, dict):
+                    continue
+                role = msg.get("role", "")
+                content = msg.get("content", "")
+                if role != "user" or not content or not isinstance(content, str):
+                    continue
+                text = normalize_text(content)
+                if 10 < len(text) < 2000:
+                    entries.append({
+                        "text": text,
+                        "category": classify_prompt(text),
+                        "source": "satml-ctf-2024",
+                    })
+
+        print(f"    Got {len(entries)} attack messages")
+
+        if len(entries) > max_entries:
+            # Dedup first, then sample
+            seen: set[str] = set()
+            unique = []
+            for e in entries:
+                key = dedup_key(e["text"])
+                if key not in seen:
+                    seen.add(key)
+                    unique.append(e)
+            entries = unique
+            print(f"    After dedup: {len(entries)}")
+
+            if len(entries) > max_entries:
+                random.seed(42)
+                entries = random.sample(entries, max_entries)
+
+        return entries
+    except Exception as e:
+        print(f"    Failed: {e}")
+        return []
+
+
+def fetch_llmail_inject(max_entries: int = 3000) -> list[dict]:
+    """Fetch LLMail-Inject email injection dataset (208K, MIT).
+
+    Extracts attack payloads from email body field.
+    """
+    print("  Fetching microsoft/llmail-inject-challenge...")
+    try:
+        from datasets import load_dataset, concatenate_datasets
+        # Dataset has Phase1 and Phase2 splits
+        ds1 = load_dataset("microsoft/llmail-inject-challenge", split="Phase1")
+        ds2 = load_dataset("microsoft/llmail-inject-challenge", split="Phase2")
+        ds = concatenate_datasets([ds1, ds2])
+        entries = []
+        for row in ds:
+            # Attack payload is in email body or subject
+            body = row.get("email_body", "") or row.get("body", "") or row.get("email_subject", "")
+            if not body or not isinstance(body, str):
+                continue
+            text = normalize_text(body)
+            if 15 < len(text) < 2000:
+                entries.append({
+                    "text": text,
+                    "category": classify_prompt(text),
+                    "source": "llmail-inject",
+                })
+
+        print(f"    Got {len(entries)} attack payloads")
+
+        if len(entries) > max_entries:
+            seen: set[str] = set()
+            unique = []
+            for e in entries:
+                key = dedup_key(e["text"])
+                if key not in seen:
+                    seen.add(key)
+                    unique.append(e)
+            entries = unique
+            print(f"    After dedup: {len(entries)}")
+
+            if len(entries) > max_entries:
+                random.seed(42)
+                entries = random.sample(entries, max_entries)
+
+        return entries
+    except Exception as e:
+        print(f"    Failed: {e}")
+        return []
+
+
+def fetch_protectai_validation() -> list[dict]:
+    """Fetch ProtectAI prompt injection validation set (3K)."""
+    print("  Fetching protectai/prompt-injection-validation...")
+    try:
+        from datasets import load_dataset, concatenate_datasets
+        # Dataset has multiple splits — fetch injection-relevant ones
+        injection_splits = ["InjecGuard_valid", "spikee", "bipia_code", "bipia_text"]
+        datasets = []
+        for split_name in injection_splits:
+            try:
+                ds = load_dataset("protectai/prompt-injection-validation", split=split_name)
+                datasets.append(ds)
+                print(f"      {split_name}: {len(ds)} rows")
+            except Exception:
+                pass
+
+        entries = []
+        for ds in datasets:
+            for row in ds:
+                # Try different column names
+                text = row.get("text", "") or row.get("prompt", "") or row.get("content", "")
+                if not text or not isinstance(text, str):
+                    continue
+                text = normalize_text(text)
+                if 10 < len(text) < 2000:
+                    entries.append({
+                        "text": text,
+                        "category": classify_prompt(text),
+                        "source": "protectai/validation",
+                    })
+        print(f"    Got {len(entries)} injection prompts")
+        return entries
+    except Exception as e:
+        print(f"    Failed: {e}")
+        return []
+
+
+# =====================================================================
+# Main build pipeline
+# =====================================================================
+
+def build_attack_db(output_path: Path | None = None, max_per_source: int = 5000) -> None:
     """Build the complete attack database."""
     output_path = output_path or DEFAULT_OUTPUT
 
     print("=" * 60)
-    print("Building attack database")
+    print("Building attack database (Phase 2 — expanded)")
     print("=" * 60)
 
     # Load existing curated entries
@@ -217,10 +441,18 @@ def build_attack_db(output_path: Path | None = None) -> None:
     # Fetch from all sources
     print("\n2. Fetching from public datasets...")
     all_new: list[dict] = []
+
+    # Original sources
     all_new.extend(fetch_deepset_injections())
     all_new.extend(fetch_trustai_jailbreaks())
     all_new.extend(fetch_chatgpt_jailbreaks())
     all_new.extend(fetch_gandalf())
+
+    # Phase 2 sources
+    all_new.extend(fetch_hackaprompt(max_entries=max_per_source))
+    all_new.extend(fetch_satml_ctf(max_entries=min(max_per_source, 3000)))
+    all_new.extend(fetch_llmail_inject(max_entries=min(max_per_source, 3000)))
+    all_new.extend(fetch_protectai_validation())
 
     print(f"\n   Total fetched: {len(all_new)} new entries")
 
@@ -239,18 +471,17 @@ def build_attack_db(output_path: Path | None = None) -> None:
 
     print(f"   Unique entries: {len(unique)} (removed {len(combined) - len(unique)} duplicates)")
 
-    # Balance categories — cap each at 30% of total, sample extras
+    # Balance categories — cap each at 25% of total, min 100
     print("\n4. Balancing categories...")
     by_category: dict[str, list[dict]] = {}
     for entry in unique:
         cat = entry["category"]
         by_category.setdefault(cat, []).append(entry)
 
-    max_per_category = max(int(len(unique) * 0.30), 50)
+    max_per_category = max(int(len(unique) * 0.25), 100)
     balanced: list[dict] = []
     for cat, entries in sorted(by_category.items()):
         if len(entries) > max_per_category:
-            # Keep diverse subset: sort by length to get variety, take every Nth
             entries.sort(key=lambda e: len(e["text"]))
             step = len(entries) / max_per_category
             sampled = [entries[int(i * step)] for i in range(max_per_category)]
@@ -259,6 +490,10 @@ def build_attack_db(output_path: Path | None = None) -> None:
         else:
             balanced.extend(entries)
             print(f"   {cat}: {len(entries)}")
+
+    # Shuffle for variety (deterministic)
+    random.seed(42)
+    random.shuffle(balanced)
 
     # Write output
     print(f"\n5. Writing {len(balanced)} entries to {output_path}")
@@ -291,5 +526,6 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Build prompt-armor attack database")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT, help="Output JSONL path")
+    parser.add_argument("--max-per-source", type=int, default=5000, help="Max entries per dataset")
     args = parser.parse_args()
-    build_attack_db(args.output)
+    build_attack_db(args.output, max_per_source=args.max_per_source)
