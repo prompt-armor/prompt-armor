@@ -120,15 +120,25 @@ class LiteEngine:
     Supports context manager protocol for proper resource cleanup:
         with LiteEngine() as engine:
             result = engine.analyze("some text")
+
+    Session-level inflammation cascade: when a suspicious prompt passes
+    (WARN decision), the engine lowers the effective threshold for
+    subsequent prompts, catching iterative probing attacks. Inflammation
+    decays exponentially so it doesn't permanently bias the engine.
     """
+
+    # Inflammation parameters
+    _INFLAMMATION_BOOST = 0.25   # threshold reduction per WARN
+    _INFLAMMATION_DECAY = 0.7    # exponential decay per request
+    _MAX_INFLAMMATION = 0.15     # max threshold reduction
 
     def __init__(self, config: ShieldConfig | None = None) -> None:
         self._config = config or load_config()
         self._layers = _build_layers(self._config)
         self._pool = ThreadPoolExecutor(max_workers=max(len(self._layers), 1))
+        self._inflammation: float = 0.0  # session-level threat awareness
 
-        # Initialize layers with fail-open: if a layer fails to setup,
-        # remove it and continue with remaining layers.
+        # Initialize layers with fail-open
         loaded: list[BaseLayer] = []
         for layer in self._layers:
             try:
@@ -137,6 +147,21 @@ class LiteEngine:
             except Exception as e:
                 logger.warning("Layer %s failed to setup: %s, disabling", layer.name, e)
         self._layers = loaded
+
+        # Initialize analytics collector if enabled
+        self._collector = None
+        if self._config.analytics.enabled:
+            try:
+                from prompt_armor.collector import AnalyticsCollector
+
+                self._collector = AnalyticsCollector(
+                    db_path=self._config.analytics.db_path,
+                    store_prompts=self._config.analytics.store_prompts,
+                    max_records=self._config.analytics.max_records,
+                )
+                logger.info("Analytics enabled: %s", self._config.analytics.db_path)
+            except Exception as e:
+                logger.warning("Analytics init failed: %s", e)
 
         # Register cleanup on process exit
         atexit.register(self.close)
@@ -164,11 +189,21 @@ class LiteEngine:
 
         return fuse_results(layer_results, self._config, total_start=start)
 
+    def _record_analytics(self, text: str, result: ShieldResult) -> None:
+        """Record analysis result to analytics DB (non-blocking)."""
+        if self._collector is not None:
+            self._collector.record(text, result)
+
     def analyze(self, text: str) -> ShieldResult:
-        """Run all layers in parallel and fuse results."""
+        """Run all layers in parallel and fuse results.
+
+        Applies inflammation cascade: previous WARN/BLOCK decisions
+        temporarily increase sensitivity for subsequent requests.
+        """
         if not isinstance(text, str):
             raise TypeError(f"Expected str, got {type(text).__name__}")
 
+        original_text = text
         start = time.perf_counter()
 
         if len(text) > _MAX_INPUT_CHARS:
@@ -179,25 +214,76 @@ class LiteEngine:
         segments = _segment_text(text)
 
         if len(segments) == 1:
-            return self._analyze_single(text, start)
+            result = self._analyze_single(text, start)
+        else:
+            results = [self._analyze_single(text, start)]
+            for segment in segments:
+                results.append(self._analyze_single(segment, start))
 
-        results = [self._analyze_single(text, start)]
-        for segment in segments:
-            results.append(self._analyze_single(segment, start))
+            best = max(results, key=lambda r: r.risk_score)
 
-        best = max(results, key=lambda r: r.risk_score)
+            latency = (time.perf_counter() - start) * 1000
+            result = ShieldResult(
+                risk_score=best.risk_score,
+                confidence=best.confidence,
+                decision=best.decision,
+                categories=best.categories,
+                evidence=best.evidence,
+                needs_council=best.needs_council,
+                latency_ms=round(latency, 2),
+                layer_results=best.layer_results,
+            )
 
-        latency = (time.perf_counter() - start) * 1000
-        return ShieldResult(
-            risk_score=best.risk_score,
-            confidence=best.confidence,
-            decision=best.decision,
-            categories=best.categories,
-            evidence=best.evidence,
-            needs_council=best.needs_council,
-            latency_ms=round(latency, 2),
-            layer_results=best.layer_results,
-        )
+        # Apply inflammation cascade
+        result = self._apply_inflammation(result, start)
+
+        self._record_analytics(original_text, result)
+        return result
+
+    def _apply_inflammation(self, result: ShieldResult, start: float) -> ShieldResult:
+        """Apply session-level inflammation to the result.
+
+        If previous requests raised inflammation (WARN/BLOCK), the effective
+        risk score gets a small boost, catching iterative probing.
+        Inflammation decays exponentially so it doesn't permanently bias.
+        """
+        from prompt_armor.fusion import _decide, _META_THRESHOLD
+        from prompt_armor.models import Decision
+
+        # Boost risk score by current inflammation level
+        if self._inflammation > 0.01:
+            boosted_score = min(1.0, result.risk_score + self._inflammation)
+            # Only re-decide if score actually changed meaningfully
+            if boosted_score > result.risk_score + 0.005:
+                new_decision = _decide(boosted_score, _META_THRESHOLD)
+                latency = (time.perf_counter() - start) * 1000
+                result = ShieldResult(
+                    risk_score=round(boosted_score, 4),
+                    confidence=result.confidence,
+                    decision=new_decision,
+                    categories=result.categories,
+                    evidence=result.evidence,
+                    needs_council=result.needs_council,
+                    latency_ms=round(latency, 2),
+                    layer_results=result.layer_results,
+                )
+
+        # Update inflammation for NEXT request
+        # Decay existing inflammation first
+        self._inflammation *= self._INFLAMMATION_DECAY
+
+        # Increase if this request was suspicious
+        if result.decision in (Decision.WARN, Decision.BLOCK):
+            self._inflammation = min(
+                self._MAX_INFLAMMATION,
+                self._inflammation + self._INFLAMMATION_BOOST * result.risk_score,
+            )
+
+        return result
+
+    def reset_session(self) -> None:
+        """Reset inflammation state for a new session."""
+        self._inflammation = 0.0
 
     @property
     def active_layers(self) -> list[str]:
@@ -205,8 +291,10 @@ class LiteEngine:
         return [layer.name for layer in self._layers]
 
     def close(self) -> None:
-        """Shut down the thread pool."""
+        """Shut down the thread pool and analytics collector."""
         self._pool.shutdown(wait=False)
+        if self._collector is not None:
+            self._collector.close()
 
     def __enter__(self) -> LiteEngine:
         return self

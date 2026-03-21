@@ -19,21 +19,24 @@ from prompt_armor.models import Category, Decision, LayerResult, ShieldResult
 
 # --- Trained meta-classifier coefficients ---
 # Learned via LogisticRegressionCV with class_weight='balanced'
-# on 355 benchmark samples (258 benign + 97 malicious).
+# on 515 benchmark samples (353 benign + 162 malicious).
 # Features: [l1, l2, l3, l4, max, min, l1*l4, l2*l3, n_above_0.1]
+# Phase 2: contrastive L3 + expanded attack DB (5,540 entries) + L4 paradigm-shift features.
+# After contrastive fine-tuning, L3 contributes via max_score, l2×l3, and n_above_0.1.
+# L3/L4 raw coefficients clamped to 0 (negative coef = exploitable).
 _META_COEFS = [
-    0.2549,   # l1_regex
-    3.5746,   # l2_classifier (dominant signal)
-    0.0,      # l3_similarity (clamped from -1.28; negative coef is exploitable)
-    0.0,      # l4_structural (clamped from -1.84; negative coef is exploitable)
-    0.9029,   # max_score
-    0.0,      # min_score (negligible, zeroed)
-    0.0694,   # l1 × l4 interaction
-    0.4874,   # l2 × l3 interaction
-    1.4753,   # n_layers_above_0.1
+    0.7707,   # l1_regex
+    2.6612,   # l2_classifier (strong signal)
+    0.0,      # l3_similarity (raw coef clamped; contributes via l2×l3 and max_score)
+    0.0,      # l4_structural (clamped from -0.98)
+    1.0468,   # max_score
+    0.0,      # min_score (negligible)
+    0.1848,   # l1 × l4 interaction
+    0.9276,   # l2 × l3 interaction (now powerful: both L2 and L3 are strong)
+    0.8700,   # n_layers_above_0.1
 ]
-_META_INTERCEPT = -2.9671
-_META_THRESHOLD = 0.53  # Optimized on held-out test set
+_META_INTERCEPT = -2.4520
+_META_THRESHOLD = 0.56  # Original threshold (works best with v1 coefficients)
 
 
 def _sigmoid(x: float) -> float:
@@ -150,8 +153,16 @@ def fuse_results(
 
 
 def _decide(score: float, threshold: float) -> Decision:
-    """Map score to decision using meta-classifier threshold."""
-    if score < threshold:
+    """Map score to decision using meta-classifier threshold with jitter.
+
+    Per-request randomization prevents attackers from optimizing against
+    a known fixed threshold. The jitter is small (sigma=0.03) so it
+    doesn't meaningfully affect honest evaluations.
+    """
+    import random
+
+    jittered = max(0.35, min(0.75, threshold + random.gauss(0, 0.03)))
+    if score < jittered:
         return Decision.ALLOW
     if score >= 0.8:
         return Decision.BLOCK
