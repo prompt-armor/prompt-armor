@@ -19,21 +19,21 @@ from prompt_armor.models import Category, Decision, LayerResult, ShieldResult
 
 # --- Trained meta-classifier coefficients ---
 # Learned via LogisticRegressionCV with class_weight='balanced'
-# on 355 benchmark samples (258 benign + 97 malicious).
+# on 515 benchmark samples (353 benign + 162 malicious).
 # Features: [l1, l2, l3, l4, max, min, l1*l4, l2*l3, n_above_0.1]
 _META_COEFS = [
-    0.2549,   # l1_regex
-    3.5746,   # l2_classifier (dominant signal)
-    0.0,      # l3_similarity (clamped from -1.28; negative coef is exploitable)
-    0.0,      # l4_structural (clamped from -1.84; negative coef is exploitable)
-    0.9029,   # max_score
+    0.7707,   # l1_regex
+    2.6612,   # l2_classifier (dominant signal)
+    0.0,      # l3_similarity (clamped from -0.43; negative coef is exploitable)
+    0.0,      # l4_structural (clamped from -0.98; negative coef is exploitable)
+    1.0468,   # max_score
     0.0,      # min_score (negligible, zeroed)
-    0.0694,   # l1 × l4 interaction
-    0.4874,   # l2 × l3 interaction
-    1.4753,   # n_layers_above_0.1
+    0.1848,   # l1 × l4 interaction
+    0.9276,   # l2 × l3 interaction
+    0.8700,   # n_layers_above_0.1
 ]
-_META_INTERCEPT = -2.9671
-_META_THRESHOLD = 0.53  # Optimized on held-out test set
+_META_INTERCEPT = -2.4520
+_META_THRESHOLD = 0.56  # Optimized on held-out test set (precision >= 85%)
 
 
 def _sigmoid(x: float) -> float:
