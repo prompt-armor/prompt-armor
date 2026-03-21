@@ -20,7 +20,8 @@ We will respond within 48 hours and work with you on a fix before public disclos
 
 | Version | Supported |
 |---------|-----------|
-| 0.1.x   | Yes       |
+| 0.3.x   | Yes       |
+| 0.1.x   | No        |
 
 ## Scope
 
@@ -34,7 +35,7 @@ Security issues in the following areas are in scope:
 ## Known Limitations
 
 prompt-armor is a defense-in-depth layer, not a complete security solution:
-- Single-prompt analysis only (no multi-turn session tracking)
-- ~19ms latency adds a small overhead to each request
+- Session tracking via inflammation cascade (opt-in, single engine instance)
+- ~27ms latency adds a small overhead to each request
 - L2 classifier requires model download (~83MB) for full accuracy
 - Non-English detection is available for DE, ES, FR, PT; other languages have limited coverage

@@ -1,6 +1,6 @@
 {
   "name": "@prompt-armor/openclaw-plugin",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Prompt injection detection for OpenClaw agents — 4 layers, 93% F1, ~19ms, offline",
   "main": "./src/index.ts",
   "openclaw": {

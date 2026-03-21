@@ -2,6 +2,30 @@
 
 All notable changes to prompt-armor will be documented in this file.
 
+## [0.3.0] - 2026-03-21
+
+### Added
+- **Contrastive L3 fine-tuning** — embeddings match by intent, not topic. Cross-similarity (attack↔benign) reduced from 0.053 to -0.021
+- **Attack DB expansion** — 1,151 → 5,540 entries from SaTML CTF 2024, LLMail-Inject, ProtectAI validation set
+- **Instruction-data boundary detection** (L4) — parses sentences as INSTRUCTION/DATA, detects injections in data zones
+- **Manipulation stack detector** (L4) — counts Cialdini's 6 persuasion principles with non-linear scoring
+- **Shannon entropy** (L4) — detects encoding tricks via character distribution anomaly
+- **Threshold jitter** — per-request gaussian noise (σ=0.03) prevents adversarial threshold optimization
+- **Inflammation cascade** — session-level threat awareness with exponential decay catches iterative probing
+- **Analytics dashboard** — Next.js + SQLite with terminal CRT theme (real-time feed, timeline, detail view)
+- **OpenClaw integration** — skill for ClawHub + plugin with hooks, tool, and skill dual-stack
+- **Benchmark expanded** — 355 → 515 samples (353 benign + 162 malicious) with held-out evaluation
+- `scripts/train_l3_contrastive.py` — contrastive fine-tuning pipeline (~50min CPU)
+- `engine.reset_session()` — clears inflammation state for new sessions
+
+### Changed
+- F1: 85% → **89.7%** (+4.7 points)
+- Recall: 88% → **93.8%** (+5.5 points)
+- Precision: 82% → **85.9%** (+3.7 points)
+- L3 uses fine-tuned model when available, falls back to base
+- Meta-classifier threshold: 0.56 (with per-request jitter)
+- Avg latency: ~27ms (from ~19ms, due to larger attack DB)
+
 ## [0.1.1] - 2026-03-20
 
 ### Security

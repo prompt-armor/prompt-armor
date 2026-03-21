@@ -1,7 +1,7 @@
 ---
 name: prompt-armor
 description: Detect prompt injection, jailbreaks, and adversarial attacks in LLM inputs before processing. 4 parallel analysis layers, 93% F1, ~19ms, runs offline.
-version: 0.2.0
+version: 0.3.0
 homepage: https://github.com/prompt-armor/prompt-armor
 metadata:
   clawdbot:

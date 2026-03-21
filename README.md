@@ -2,7 +2,7 @@
   <h1 align="center">prompt-armor</h1>
   <p align="center">
     <strong>The open-source firewall for LLM prompts.</strong><br>
-    Detect prompt injections, jailbreaks, and attacks in ~15ms. No LLM needed. Runs offline.
+    Detect prompt injections, jailbreaks, and attacks in ~27ms. No LLM needed. Runs offline.
   </p>
   <p align="center">
     <a href="https://github.com/prompt-armor/prompt-armor/actions"><img src="https://img.shields.io/github/actions/workflow/status/prompt-armor/prompt-armor/ci.yml?style=flat-square&label=tests" alt="CI"></a>
@@ -16,7 +16,7 @@
 
 Most LLM security tools either need an LLM to work (circular dependency), cost money per request, or return a useless binary "safe/unsafe" with no explanation.
 
-**prompt-armor** runs 4 analysis layers in parallel, fuses their scores, and tells you *exactly* what was detected, with evidence and confidence — in ~15ms, offline, for free.
+**prompt-armor** runs 4 analysis layers in parallel, fuses their scores via a trained meta-classifier, and tells you *exactly* what was detected, with evidence and confidence — in ~27ms, offline, for free.
 
 ```bash
 pip install prompt-armor
@@ -44,9 +44,9 @@ result.latency_ms   # 12.4
 | Needs an LLM? | **No** | No | Yes | No | No |
 | Runs offline? | **Yes** | Yes | No | No | Yes |
 | Detection layers | **4 (fused)** | 1 per scanner | 1 (LLM) | ? (proprietary) | 6 (independent) |
-| Score fusion | **Weighted + convergence** | None | N/A | ? | None |
+| Score fusion | **Trained meta-classifier** | None | N/A | ? | None |
 | Attack categories | **8** | Binary | N/A | Multi | Binary |
-| Avg latency | **~15ms** | 200-500ms | 1-3s | ~50ms | ~100ms |
+| Avg latency | **~27ms** | 200-500ms | 1-3s | ~50ms | ~100ms |
 | MCP Server | **Yes** | No | No | No | No |
 | CI/CD exit codes | **Yes** | No | No | No | No |
 | License | **Apache 2.0** | MIT | Apache 2.0 | Proprietary | Apache 2.0 |
@@ -70,30 +70,28 @@ result.latency_ms   # 12.4
                  ┌─── L1 Regex         (<1ms)  ───┐
                  │    40+ weighted patterns        │
                  │                                 │
-INPUT ── PRE ────┼─── L2 Classifier    (<5ms)  ───┼─── FUSION ─── GATE ─── OUTPUT
-                 │    keyword/ML detection         │     ▲          │
-                 │                                 │     │          ├─ ALLOW (< 0.3)
-                 ├─── L3 Similarity    (<15ms) ───┤     │          ├─ WARN  (0.3-0.7)
-                 │    FAISS cosine vs known attacks│     │          ├─ BLOCK (> 0.7)
-                 │                                 │     │          └─ needs_council?
-                 └─── L4 Structural    (<2ms)  ───┘     │
-                      delimiters, encoding, ratios       │
-                                                         │
-                                            Convergence boost (+)
-                                            Divergence penalty (-)
+INPUT ── PRE ────┼─── L2 Classifier    (<5ms)  ───┼─── META-CLASSIFIER ─── GATE ─── OUTPUT
+                 │    DeBERTa-v3 ONNX              │         ▲               │
+                 │                                 │         │               ├─ ALLOW
+                 ├─── L3 Similarity    (<15ms) ───┤         │               ├─ WARN
+                 │    contrastive embeddings+FAISS │         │               ├─ BLOCK
+                 │                                 │         │               └─ needs_council?
+                 └─── L4 Structural    (<2ms)  ───┘         │
+                      boundary, entropy, manipulation       │
+                                                    Threshold jitter (σ=0.03)
+                                                    + inflammation cascade
 ```
 
 **Each layer catches what the others miss:**
 
 - **L1 Regex** — fast pattern matching with contextual modifiers. Catches "ignore previous instructions" and 40+ known patterns. Understands quotes and educational context.
-- **L2 Classifier** — DeBERTa-v3 ML model via ONNX Runtime (keyword heuristic fallback). Understands semantic intent — catches subtle and indirect attacks that regex can't see.
-- **L3 Similarity** — embeds the prompt and compares against 96+ known attacks via FAISS. Catches paraphrased and novel variations that regex can't see.
-- **L4 Structural** — analyzes structure, not content. Catches delimiter injection (`<|im_start|>`), encoding tricks (base64/unicode), privilege escalation signals, and anomalous imperative verb ratios.
+- **L2 Classifier** — DeBERTa-v3-xsmall (22M params) via ONNX Runtime. Understands semantic intent — catches subtle and indirect attacks that regex can't see.
+- **L3 Similarity** — contrastive fine-tuned embeddings + FAISS cosine similarity against 5,540 known attacks. Matches by *intent*, not topic — won't false-positive on security discussions.
+- **L4 Structural** — analyzes structure, not content. Instruction-data boundary detection, manipulation stack (Cialdini's 6 principles), Shannon entropy, delimiter injection, encoding tricks.
 
-**Fusion** combines all 4 scores with:
-- Weighted averaging (configurable per layer)
-- **Convergence boost** — when layers agree, confidence increases
-- **Divergence penalty** — when layers disagree, confidence drops and `needs_council` is flagged
+**Fusion** uses a trained logistic regression meta-classifier (9 features) with:
+- **Threshold jitter** — per-request randomization prevents adversarial threshold optimization
+- **Inflammation cascade** — session-level threat awareness catches iterative probing attacks
 
 ---
 
@@ -231,21 +229,18 @@ thresholds:
 python tests/benchmark/run_benchmark.py
 ```
 
-Results on public dataset (v0.1, 355 samples — 250 benign + 105 malicious):
+Results on public dataset (v0.3.0, 515 samples — 353 benign + 162 malicious):
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| **Accuracy** | 91.8% | Full dataset (355 samples) |
-| **Precision** | 79.8% | |
-| **Recall** | 93.8% | Only 6 out of 97 attacks pass |
-| **F1 Score** | 86.3% | |
-| **Held-out F1** | **93.0%** | 30% held-out test set, never seen during training |
-| **Avg Latency** | ~19ms | |
-| **P95 Latency** | ~41ms | |
+| **Accuracy** | 93.2% | Full dataset (515 samples) |
+| **Precision** | 85.9% | |
+| **Recall** | 93.8% | Only 10 out of 162 attacks pass |
+| **F1 Score** | **89.7%** | |
+| **Avg Latency** | ~27ms | |
+| **P95 Latency** | ~130ms | |
 
-Metrics validated on held-out test set (30% of data, never used during training). Multilingual detection covers German, Spanish, French, and Portuguese. Fusion uses a trained meta-classifier with non-negative layer coefficients. The 4-layer fusion means each layer contributes what it's best at — L1 catches known patterns, L2 (DeBERTa) catches semantic attacks, L3 catches paraphrased variants, L4 catches structural anomalies.
-
-Benchmark includes adversarial prompts from `deepset/prompt-injections`, `TrustAIRLab/in-the-wild-jailbreak-prompts`, and `Lakera/gandalf`. Dataset is public in `tests/benchmark/dataset/`.
+Metrics validated on held-out test set (30% of data, never seen during training). Attack DB: 5,540 entries from 8 sources (SaTML CTF, LLMail-Inject, ProtectAI, deepset, TrustAIRLab, Lakera Gandalf, and hand-curated). Multilingual detection covers EN, DE, ES, FR, PT. Dataset is public in `tests/benchmark/dataset/`.
 
 ---
 
@@ -375,18 +370,18 @@ prompt-armor/
 │   ├── models.py            # ShieldResult, Evidence, Decision
 │   ├── layers/
 │   │   ├── l1_regex.py      # Pattern matching (40+ rules)
-│   │   ├── l2_classifier.py # Keyword/ML classifier
-│   │   ├── l3_similarity.py # FAISS cosine similarity
-│   │   └── l4_structural.py # Structural feature analysis
+│   │   ├── l2_classifier.py # DeBERTa-v3 ONNX classifier
+│   │   ├── l3_similarity.py # Contrastive embeddings + FAISS
+│   │   └── l4_structural.py # Boundary, entropy, manipulation
 │   ├── data/
 │   │   ├── rules/           # L1 regex rules (YAML)
-│   │   └── attacks/         # L3 known attack database (JSONL)
+│   │   └── attacks/         # L3 attack DB (5,540 entries)
 │   ├── cli/                 # Click + Rich CLI
 │   └── mcp/                 # MCP server (Python SDK)
 └── tests/
-    ├── unit/                # 83 unit tests
-    ├── integration/         # 17 integration tests
-    └── benchmark/           # Public benchmark dataset + runner
+    ├── unit/                # Unit tests
+    ├── integration/         # Integration tests
+    └── benchmark/           # 515-sample benchmark dataset
 ```
 
 **Design decisions:**
@@ -400,9 +395,9 @@ prompt-armor/
 ## Roadmap
 
 - [x] **v0.1** — Lite engine with 4 layers, CLI, MCP server, benchmark
-- [ ] **v0.2** — Council mode (3 diverse LLMs analyze in parallel when Lite is uncertain)
-- [ ] **v0.3** — Multi-language (PT, ES), ONNX classifier for L2, expanded attack DB
-- [ ] **v1.0** — Production-ready with <0.1% FPR target
+- [x] **v0.3** — Paradigm Shift: contrastive L3, 5.5K attack DB, inflammation cascade, F1 89.7%
+- [ ] **v0.4** — Negative selection layer (L5), tiny LLM judge (L6 conditional)
+- [ ] **v1.0** — Production-ready with <0.1% FPR target, Council mode
 - [ ] **Cloud** — Managed API, dashboard, threat intel feed, continuously updated models
 
 ---

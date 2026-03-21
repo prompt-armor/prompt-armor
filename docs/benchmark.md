@@ -7,34 +7,28 @@ python tests/benchmark/run_benchmark.py
 python tests/benchmark/run_benchmark.py --output results.json
 ```
 
-## Current Results (v0.1.1)
+## Current Results (v0.3.0)
 
-Dataset: 258 benign + 97 malicious (355 total) from deepset/prompt-injections, TrustAIRLab/in-the-wild-jailbreak-prompts, Lakera/gandalf, and hand-curated samples.
-
-**Held-out test set (30%, never seen during training):**
-
-| Metric | Value |
-|--------|-------|
-| Precision | 93.3% |
-| Recall | 96.6% |
-| F1 Score | 93.0% |
+Dataset: 353 benign + 162 malicious (515 total) from deepset/prompt-injections, TrustAIRLab/in-the-wild-jailbreak-prompts, SaTML CTF 2024, LLMail-Inject, ProtectAI, Lakera/gandalf, and hand-curated samples.
 
 **Full dataset:**
 
 | Metric | Value |
 |--------|-------|
-| Accuracy | 91.8% |
-| Precision | 79.8% |
+| Accuracy | 93.2% |
+| Precision | 85.9% |
 | Recall | 93.8% |
-| F1 Score | 86.3% |
-| Avg Latency | ~19ms |
-| P95 Latency | ~41ms |
+| F1 Score | **89.7%** |
+| Avg Latency | ~27ms |
+| P95 Latency | ~130ms |
 
 ## Methodology
 
 The meta-classifier fusion is trained on 70% of the data and validated on a held-out 30% test set to prevent overfitting. Layer coefficients for L3 (similarity) and L4 (structural) are clamped to non-negative values to prevent adversarial exploitation.
 
 The benchmark includes attacks in English, German, Spanish, French, and Portuguese, covering 8 attack categories.
+
+L3 uses a contrastive fine-tuned embedding model (TripletLoss) that matches by intent rather than topic, reducing false positives on security-related benign text.
 
 ## Retraining the Meta-Classifier
 
@@ -47,12 +41,18 @@ python scripts/train_fusion.py
 
 Then update the `_META_COEFS` in `src/prompt_armor/fusion.py` with the new coefficients.
 
+To retrain L3 contrastive embeddings (~50min on CPU):
+
+```bash
+python scripts/train_l3_contrastive.py
+```
+
 ## Dataset
 
 The benchmark dataset is in `tests/benchmark/dataset/`:
 
-- `benign.jsonl` — 258 safe prompts (coding questions, general knowledge, multilingual)
-- `malicious.jsonl` — 97 attack prompts (injections, jailbreaks, exfiltration, etc.)
+- `benign.jsonl` — 353 safe prompts (coding questions, general knowledge, multilingual, hard negatives)
+- `malicious.jsonl` — 162 attack prompts (injections, jailbreaks, exfiltration, encoding, multilingual)
 
 Format:
 ```json

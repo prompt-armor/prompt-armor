@@ -3,7 +3,9 @@
 prompt-armor uses 4 analysis layers that run **in parallel**, combined by a trained meta-classifier.
 
 ```
-INPUT → NORMALIZE → SEGMENT → [L1 | L2 | L3 | L4] → META-CLASSIFIER → DECISION
+INPUT → NORMALIZE → SEGMENT → [L1 | L2 | L3 | L4] → META-CLASSIFIER → DECISION (+jitter)
+                                                            ↑
+                                                    inflammation cascade
 ```
 
 ## Preprocessing
@@ -19,7 +21,7 @@ Before any layer runs:
 
 **Latency:** < 1ms | **Dependencies:** None
 
-60+ weighted regex rules covering 8 attack categories in 5 languages (EN, DE, ES, FR, PT). Rules are defined in `data/rules/default_rules.yml`.
+40+ weighted regex rules covering 8 attack categories in 5 languages (EN, DE, ES, FR, PT). Rules are defined in `data/rules/default_rules.yml`.
 
 Features:
 - Weighted rules (0.0-1.0) per pattern
@@ -35,17 +37,19 @@ DeBERTa-v3-xsmall (22M params) fine-tuned for prompt injection classification. R
 - Auto-downloads from HuggingFace Hub on first use (83MB, pinned by commit SHA)
 - Score calibration: raw model output (0.23-0.78 range) stretched to 0.0-1.0
 - Falls back to keyword heuristic if ONNX model is not available
-- The **dominant signal** in the meta-classifier (highest coefficient)
+- Strong signal in the meta-classifier (high positive coefficient)
 
-## L3 — Semantic Similarity
+## L3 — Semantic Similarity (Contrastive)
 
 **Latency:** 10-20ms | **Dependencies:** sentence-transformers, faiss-cpu
 
-Compares prompt embeddings against a database of 1,151 known attack embeddings using cosine similarity via FAISS.
+Compares prompt embeddings against a database of **5,540 known attack embeddings** using cosine similarity via FAISS.
 
-- Model: `paraphrase-multilingual-MiniLM-L12-v2` (50+ languages)
-- Attack database: `data/attacks/known_attacks.jsonl`
-- Detects paraphrased and novel variations of known attacks
+- Model: `paraphrase-multilingual-MiniLM-L12-v2`, **contrastive fine-tuned** with TripletLoss
+- Fine-tuning separates embeddings by **intent**, not topic — "how does DAN jailbreak work?" (benign) no longer matches "do anything now" (attack)
+- Cross-similarity (attack↔benign) reduced from 0.053 to -0.021 after fine-tuning
+- Attack database: `data/attacks/known_attacks.jsonl` (SaTML CTF, LLMail-Inject, ProtectAI, deepset, TrustAIRLab, Lakera, hand-curated)
+- Falls back to base model if contrastive model not available
 
 ## L4 — Structural Analysis
 
@@ -53,7 +57,9 @@ Compares prompt embeddings against a database of 1,151 known attack embeddings u
 
 Analyzes structural features without looking at specific content:
 
-- Instruction override ratio (imperative verb density, tiered weighting)
+- **Instruction-data boundary detection** — parses sentences as INSTRUCTION/DATA, detects injections buried in data zones
+- **Manipulation stack detector** — counts Cialdini's 6 persuasion principles (authority, urgency, social proof, emotional, power, narrative hijack) with non-linear scoring
+- **Shannon entropy** — detects encoding tricks via character distribution anomaly (base64 ~5.8 vs normal English ~4.0)
 - Delimiter injection detection (system tags, markdown boundaries)
 - Role assignment counting (expanded patterns with benign role whitelist)
 - Privilege escalation signal density
@@ -72,19 +78,22 @@ A trained logistic regression model combines all 4 layer scores with interaction
 - L2 × L3 interaction (ML + similarity agreement)
 - Number of layers with score > 0.1
 
-The meta-classifier learned that:
-- **L2 is the dominant signal** — semantic understanding catches what rules cannot
+**Key insights from training:**
+- **L2 × L3 interaction** is a powerful signal — when both DeBERTa and contrastive similarity agree, confidence is very high
 - **Number of agreeing layers** is the second strongest signal
-- L3/L4 coefficients are clamped to non-negative to prevent adversarial exploitation
+- L3/L4 raw coefficients are clamped to non-negative to prevent adversarial exploitation
+- **Threshold jitter** (σ=0.03) randomizes the decision boundary per-request, preventing attackers from binary-searching the exact threshold
 
 **Output:** Risk score (0.0-1.0) via sigmoid, thresholded into ALLOW / WARN / BLOCK.
 
-## Decision Gate
+## Session-Level Inflammation Cascade
 
-- Score < 0.53 → **ALLOW**
-- Score 0.53-0.80 → **WARN**
-- Score ≥ 0.80 → **BLOCK**
-- Any single layer ≥ 0.95 → instant **BLOCK** (hard block)
+When a WARN or BLOCK decision occurs, the engine temporarily increases sensitivity for subsequent requests in the same session:
+
+- Inflammation boost proportional to risk score (capped at 0.15)
+- Exponential decay (×0.7 per request) — doesn't permanently bias
+- Catches iterative probing attacks where attackers send progressively aggressive prompts
+- `engine.reset_session()` clears inflammation for new sessions
 
 ## Fail-Open Design
 
