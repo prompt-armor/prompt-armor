@@ -135,14 +135,14 @@ class AnalyticsCollector:
         conn.execute("PRAGMA synchronous=NORMAL;")
 
         batch_count = 0
-        _BATCH_SIZE = 100  # Commit every N records for performance
+        batch_size = 100  # Commit every N records for performance
 
         while self._running:
             try:
                 item = self._queue.get(timeout=1.0)
             except Empty:
                 # Commit any pending writes on idle
-                if batch_count % _BATCH_SIZE != 0 and batch_count > 0:
+                if batch_count % batch_size != 0 and batch_count > 0:
                     conn.commit()
                 continue
 
@@ -191,8 +191,8 @@ class AnalyticsCollector:
 
                 batch_count += 1
 
-                # Batch commit for performance (every _BATCH_SIZE records)
-                if batch_count % _BATCH_SIZE == 0:
+                # Batch commit for performance (every batch_size records)
+                if batch_count % batch_size == 0:
                     conn.commit()
 
                 # Periodic cleanup

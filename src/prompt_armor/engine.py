@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 
 from prompt_armor.config import ShieldConfig, load_config
-from prompt_armor.fusion import fuse_results
+from prompt_armor.fusion import _META_THRESHOLD, _decide, fuse_results
 from prompt_armor.layers.base import BaseLayer
 from prompt_armor.layers.l1_regex import L1RegexLayer
 from prompt_armor.layers.l4_structural import L4StructuralLayer
@@ -306,8 +306,6 @@ class LiteEngine:
         Inflammation decays exponentially so it doesn't permanently bias.
         Thread-safe: all inflammation state access is locked.
         """
-        from prompt_armor.fusion import _decide, _META_THRESHOLD
-
         with self._inflammation_lock:
             # Boost risk score by current inflammation level
             if self._inflammation > 0.01:
