@@ -11,8 +11,13 @@ let db: Database.Database | null = null;
 function getDb(): Database.Database {
   if (!db) {
     try {
-      db = new Database(DB_PATH, { readonly: true, fileMustExist: true });
+      db = new Database(DB_PATH, { fileMustExist: true });
       db.pragma("journal_mode = WAL");
+      // Ensure council columns exist (idempotent migration for older DBs)
+      const cols = ["council_decision TEXT", "council_reasoning TEXT", "council_confidence TEXT", "council_model TEXT", "council_latency_ms REAL DEFAULT 0"];
+      for (const col of cols) {
+        try { db.exec(`ALTER TABLE analyses ADD COLUMN ${col}`); } catch { /* already exists */ }
+      }
     } catch {
       throw new Error(
         `Analytics database not found at ${DB_PATH}. Enable analytics in .prompt-armor.yml first.`
