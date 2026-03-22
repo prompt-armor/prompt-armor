@@ -254,6 +254,7 @@ class Council:
             latency_ms=lite_result.latency_ms,
             cost_usd=lite_result.cost_usd,
             layer_results=lite_result.layer_results,
+            lite_decision=lite_result.decision.value,
             council_decision=verdict.judgment,
             council_reasoning=verdict.reasoning,
             council_confidence=verdict.confidence,

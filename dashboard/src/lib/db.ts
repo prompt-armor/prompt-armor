@@ -14,7 +14,7 @@ function getDb(): Database.Database {
       db = new Database(DB_PATH, { fileMustExist: true });
       db.pragma("journal_mode = WAL");
       // Ensure council columns exist (idempotent migration for older DBs)
-      const cols = ["council_decision TEXT", "council_reasoning TEXT", "council_confidence TEXT", "council_model TEXT", "council_latency_ms REAL DEFAULT 0"];
+      const cols = ["lite_decision TEXT", "council_decision TEXT", "council_reasoning TEXT", "council_confidence TEXT", "council_model TEXT", "council_latency_ms REAL DEFAULT 0"];
       for (const col of cols) {
         try { db.exec(`ALTER TABLE analyses ADD COLUMN ${col}`); } catch { /* already exists */ }
       }
@@ -41,11 +41,18 @@ export interface Analysis {
   layer_scores: string;
   latency_ms: number;
   needs_council: number;
+  lite_decision: string | null;
   council_decision: string | null;
   council_reasoning: string | null;
   council_confidence: string | null;
   council_model: string | null;
   council_latency_ms: number;
+}
+
+export interface CouncilTransition {
+  from_decision: string;
+  to_decision: string;
+  count: number;
 }
 
 export interface OverviewStats {
@@ -59,6 +66,7 @@ export interface OverviewStats {
   blocksLastHour: number;
   councilTotal: number;
   councilReversals: number;
+  councilTransitions: CouncilTransition[];
 }
 
 export interface CategoryCount {
@@ -86,13 +94,22 @@ export function getOverviewStats(): OverviewStats {
       SUM(CASE WHEN timestamp >= datetime('now', 'localtime', '-1 day') THEN 1 ELSE 0 END) as today,
       SUM(CASE WHEN decision='block' AND timestamp >= datetime('now', 'localtime', '-1 hours') THEN 1 ELSE 0 END) as blocksLastHour,
       SUM(CASE WHEN council_decision IS NOT NULL THEN 1 ELSE 0 END) as councilTotal,
-      SUM(CASE WHEN council_decision IS NOT NULL AND needs_council = 1 AND decision != 'warn' THEN 1 ELSE 0 END) as councilReversals
+      SUM(CASE WHEN council_decision IS NOT NULL AND lite_decision IS NOT NULL AND lite_decision != decision THEN 1 ELSE 0 END) as councilReversals
     FROM analyses
   `).get() as {
     total: number; allow: number; warn: number; block: number;
     avgLatency: number | null; avgScore: number | null; today: number; blocksLastHour: number;
     councilTotal: number; councilReversals: number;
   };
+
+  // Council transitions breakdown
+  const transitions = d.prepare(`
+    SELECT lite_decision as from_decision, decision as to_decision, COUNT(*) as count
+    FROM analyses
+    WHERE council_decision IS NOT NULL AND lite_decision IS NOT NULL AND lite_decision != decision
+    GROUP BY lite_decision, decision
+    ORDER BY count DESC
+  `).all() as CouncilTransition[];
 
   return {
     total: row.total,
@@ -105,6 +122,7 @@ export function getOverviewStats(): OverviewStats {
     blocksLastHour: row.blocksLastHour,
     councilTotal: row.councilTotal ?? 0,
     councilReversals: row.councilReversals ?? 0,
+    councilTransitions: transitions,
   };
 }
 

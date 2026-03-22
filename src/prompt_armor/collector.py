@@ -55,12 +55,14 @@ INSERT INTO analyses (
     risk_score, confidence, decision,
     categories, evidence, layer_scores,
     latency_ms, needs_council,
+    lite_decision,
     council_decision, council_reasoning, council_confidence,
     council_model, council_latency_ms
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 """
 
 _MIGRATE_COUNCIL = [
+    "ALTER TABLE analyses ADD COLUMN lite_decision TEXT;",
     "ALTER TABLE analyses ADD COLUMN council_decision TEXT;",
     "ALTER TABLE analyses ADD COLUMN council_reasoning TEXT;",
     "ALTER TABLE analyses ADD COLUMN council_confidence TEXT;",
@@ -174,6 +176,7 @@ class AnalyticsCollector:
                     layer_scores,
                     result.latency_ms,
                     int(result.needs_council),
+                    result.lite_decision,
                     result.council_decision,
                     result.council_reasoning,
                     result.council_confidence,

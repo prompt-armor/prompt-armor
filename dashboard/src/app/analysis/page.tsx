@@ -17,6 +17,7 @@ interface Analysis {
   layer_scores: string;
   latency_ms: number;
   needs_council: number;
+  lite_decision: string | null;
   council_decision: string | null;
   council_reasoning: string | null;
   council_confidence: string | null;
@@ -140,6 +141,18 @@ function AnalysisContent() {
                 ({analysis.council_confidence})
               </span>
             </div>
+            {analysis.lite_decision && analysis.lite_decision !== analysis.decision && (
+              <div className="flex items-center gap-2">
+                <span className="w-16 text-right" style={{ color: '#1f521f' }}>OVERRIDE</span>
+                <span style={{ color: analysis.lite_decision === 'allow' ? '#33ff00' : analysis.lite_decision === 'block' ? '#ff3333' : '#ffb000' }}>
+                  {analysis.lite_decision.toUpperCase()}
+                </span>
+                <span style={{ color: '#00ccff' }}>→</span>
+                <span style={{ color: analysis.decision === 'allow' ? '#33ff00' : analysis.decision === 'block' ? '#ff3333' : '#ffb000' }}>
+                  {analysis.decision.toUpperCase()}
+                </span>
+              </div>
+            )}
             <div>
               <span style={{ color: '#1f521f' }}>model ..... </span>
               <span style={{ color: '#00ccff' }}>{analysis.council_model}</span>

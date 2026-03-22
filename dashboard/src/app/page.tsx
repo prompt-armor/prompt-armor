@@ -88,8 +88,22 @@ export default function OverviewPage() {
             <div className="text-2xl font-bold" style={{ color: '#00ccff' }}>
               {stats.councilTotal}
             </div>
-            <div className="text-[10px] mt-1" style={{ color: '#1f521f' }}>
-              {stats.councilReversals} reversals
+            <div className="text-[10px] mt-1 space-y-0.5">
+              {stats.councilTransitions.length > 0 ? (
+                stats.councilTransitions.map((t, i) => {
+                  const colors: Record<string, string> = { allow: "#33ff00", warn: "#ffb000", block: "#ff3333" };
+                  return (
+                    <div key={i}>
+                      <span style={{ color: colors[t.from_decision] || '#1f521f' }}>{t.from_decision}</span>
+                      <span style={{ color: '#1f521f' }}> → </span>
+                      <span style={{ color: colors[t.to_decision] || '#1f521f' }}>{t.to_decision}</span>
+                      <span style={{ color: '#00ccff' }}> ({t.count})</span>
+                    </div>
+                  );
+                })
+              ) : (
+                <div style={{ color: '#1f521f' }}>no reversals</div>
+              )}
             </div>
           </TerminalCard>
         )}

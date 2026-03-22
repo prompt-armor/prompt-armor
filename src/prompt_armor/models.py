@@ -69,6 +69,7 @@ class ShieldResult:
     cost_usd: float = 0.0
     layer_results: tuple[LayerResult, ...] = ()
     # Council fields (populated when council is invoked)
+    lite_decision: str | None = None  # original Lite decision before council override
     council_decision: str | None = None  # SAFE | SUSPICIOUS | MALICIOUS
     council_reasoning: str | None = None
     council_confidence: str | None = None  # HIGH | MEDIUM | LOW
@@ -96,6 +97,7 @@ class ShieldResult:
             "cost_usd": self.cost_usd,
         }
         if self.council_decision is not None:
+            d["lite_decision"] = self.lite_decision
             d["council_decision"] = self.council_decision
             d["council_reasoning"] = self.council_reasoning
             d["council_confidence"] = self.council_confidence
