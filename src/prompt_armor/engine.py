@@ -137,6 +137,7 @@ class LiteEngine:
         self._layers = _build_layers(self._config)
         self._pool = ThreadPoolExecutor(max_workers=max(len(self._layers), 1))
         self._inflammation: float = 0.0  # session-level threat awareness
+        self._council = None  # Lazy-initialized when council.enabled
 
         # Initialize layers with fail-open
         loaded: list[BaseLayer] = []
@@ -237,8 +238,45 @@ class LiteEngine:
         # Apply inflammation cascade
         result = self._apply_inflammation(result, start)
 
+        # Council: LLM second opinion for uncertain cases
+        if self._config.council.enabled and result.needs_council:
+            result = self._run_council(original_text, result)
+
         self._record_analytics(original_text, result)
         return result
+
+    def _run_council(self, text: str, result: ShieldResult) -> ShieldResult:
+        """Dispatch to council for uncertain results. Fail-safe on any error."""
+        if self._council is None:
+            from prompt_armor.council import Council
+
+            self._council = Council(self._config.council)
+
+        try:
+            verdict = self._council.judge(text, result)
+            if verdict is not None:
+                return self._council.apply_veto(result, verdict)
+        except Exception as e:
+            logger.warning("Council failed: %s, using fallback", e)
+
+        # Fallback: use configured fallback decision
+        fallback = (
+            Decision.WARN
+            if self._config.council.fallback_decision == "warn"
+            else Decision.BLOCK
+        )
+        return ShieldResult(
+            risk_score=result.risk_score,
+            confidence=result.confidence,
+            decision=fallback,
+            categories=result.categories,
+            evidence=result.evidence,
+            needs_council=result.needs_council,
+            latency_ms=result.latency_ms,
+            cost_usd=result.cost_usd,
+            layer_results=result.layer_results,
+            council_reasoning=f"Council unavailable, fallback={fallback.value}",
+        )
 
     def _apply_inflammation(self, result: ShieldResult, start: float) -> ShieldResult:
         """Apply session-level inflammation to the result.

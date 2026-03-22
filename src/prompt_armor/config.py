@@ -36,6 +36,26 @@ class AnalyticsConfig(BaseModel):
     max_records: int = Field(default=100_000, ge=1000)
 
 
+class ProviderConfig(BaseModel):
+    """Configuration for a single council provider (LLM judge)."""
+
+    type: str = "ollama"  # "ollama" | "openrouter" (future)
+    model: str = "phi3:mini"
+    base_url: str = "http://localhost:11434"
+    privacy_mode: str = "full"  # "full" | "truncated"
+    api_key: str | None = None
+
+
+class CouncilConfig(BaseModel):
+    """Council mode configuration — LLM second opinion for uncertain cases."""
+
+    enabled: bool = False
+    timeout_s: float = Field(default=5.0, ge=1.0, le=30.0)
+    fallback_decision: str = Field(default="warn", pattern="^(warn|block)$")
+    budget_monthly_usd: float = Field(default=0.0, ge=0.0)
+    providers: list[ProviderConfig] = Field(default_factory=lambda: [ProviderConfig()])
+
+
 class ShieldConfig(BaseModel):
     """Top-level configuration for prompt-armor."""
 
@@ -46,6 +66,7 @@ class ShieldConfig(BaseModel):
     rules_path: Path | None = None
     attacks_path: Path | None = None
     analytics: AnalyticsConfig = Field(default_factory=AnalyticsConfig)
+    council: CouncilConfig = Field(default_factory=CouncilConfig)
 
     @field_validator("rules_path", "attacks_path", mode="before")
     @classmethod
