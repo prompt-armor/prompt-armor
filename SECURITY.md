@@ -20,13 +20,14 @@ We will respond within 48 hours and work with you on a fix before public disclos
 
 | Version | Supported |
 |---------|-----------|
-| 0.3.x   | Yes       |
+| 0.5.x   | Yes       |
+| 0.3.x   | No        |
 | 0.1.x   | No        |
 
 ## Scope
 
 Security issues in the following areas are in scope:
-- Bypass techniques that evade all 4 analysis layers
+- Bypass techniques that evade all 5 analysis layers
 - Denial of service via crafted inputs
 - Model supply chain attacks (compromised ONNX models)
 - Information leakage through the analysis pipeline
@@ -36,6 +37,7 @@ Security issues in the following areas are in scope:
 
 prompt-armor is a defense-in-depth layer, not a complete security solution:
 - Session tracking via inflammation cascade (opt-in, single engine instance)
-- ~27ms latency adds a small overhead to each request
+- ~34ms latency adds a small overhead to each request
+- Council mode sends prompts to local LLM (ollama) — configure `privacy_mode: truncated` for API providers
 - L2 classifier requires model download (~83MB) for full accuracy
 - Non-English detection is available for DE, ES, FR, PT; other languages have limited coverage

@@ -4,12 +4,13 @@
 
 ## Features
 
-- **4 parallel analysis layers** — regex, ML classifier, contrastive semantic similarity, structural analysis
+- **5 parallel analysis layers** — regex, ML classifier, contrastive semantic similarity, structural analysis, anomaly detection
 - **Trained meta-classifier fusion** — learned optimal layer combination from benchmark data
-- **~27ms latency** — fast enough for real-time API integration
+- **~34ms latency** — fast enough for real-time API integration
 - **Fully offline** — no API keys, no LLM dependency, no network calls during analysis
 - **Multilingual** — EN, DE, ES, FR, PT regex rules + multilingual embeddings
 - **Session awareness** — inflammation cascade catches iterative probing attacks
+- **Council mode** — optional LLM judge (ollama) for uncertain cases
 - **MCP Server** — native integration with Claude Desktop and other MCP clients
 - **CI-friendly CLI** — semantic exit codes (0=allow, 1=warn, 2=block)
 - **Security hardened** — threshold jitter, per-layer timeout, fail-open, Unicode normalization, supply chain pinning
@@ -31,4 +32,4 @@ print(result.decision)  # Decision.BLOCK
 
 ## Benchmark
 
-F1: **89.7%** | Recall: 93.8% | Precision: 85.9% | Latency: ~27ms | Attack DB: 5,540 entries
+F1: **91.1%** | Recall: 98.1% | Precision: 85.0% | Latency: ~34ms | Attack DB: 25,160 entries

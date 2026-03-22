@@ -1,11 +1,11 @@
 # Analysis Layers
 
-prompt-armor uses 4 analysis layers that run **in parallel**, combined by a trained meta-classifier.
+prompt-armor uses 5 analysis layers that run **in parallel**, combined by a trained meta-classifier. An optional Council (LLM judge) handles uncertain cases.
 
 ```
-INPUT → NORMALIZE → SEGMENT → [L1 | L2 | L3 | L4] → META-CLASSIFIER → DECISION (+jitter)
-                                                            ↑
-                                                    inflammation cascade
+INPUT → NORMALIZE → SEGMENT → [L1 | L2 | L3 | L4 | L5] → META-CLASSIFIER → DECISION (+jitter)
+                                                                 ↑                 │
+                                                         inflammation cascade      └─→ Council? (LLM)
 ```
 
 ## Preprocessing
@@ -43,12 +43,13 @@ DeBERTa-v3-xsmall (22M params) fine-tuned for prompt injection classification. R
 
 **Latency:** 10-20ms | **Dependencies:** sentence-transformers, faiss-cpu
 
-Compares prompt embeddings against a database of **5,540 known attack embeddings** using cosine similarity via FAISS.
+Compares prompt embeddings against a database of **25,160 known attack embeddings** using cosine similarity via FAISS IVFFlat.
 
 - Model: `paraphrase-multilingual-MiniLM-L12-v2`, **contrastive fine-tuned** with TripletLoss
 - Fine-tuning separates embeddings by **intent**, not topic — "how does DAN jailbreak work?" (benign) no longer matches "do anything now" (attack)
 - Cross-similarity (attack↔benign) reduced from 0.053 to -0.021 after fine-tuning
-- Attack database: `data/attacks/known_attacks.jsonl` (SaTML CTF, LLMail-Inject, ProtectAI, deepset, TrustAIRLab, Lakera, hand-curated)
+- FAISS IVFFlat index (256 clusters, 16 nprobe) for O(sqrt(n)) search at 25K+ vectors
+- Attack database: `data/attacks/known_attacks.jsonl` (10 sources: SaTML CTF, LLMail-Inject, ProtectAI, SafeGuard, jackhhao, deepset, TrustAIRLab, Lakera, hand-curated)
 - Falls back to base model if contrastive model not available
 
 ## L4 — Structural Analysis
@@ -66,25 +67,59 @@ Analyzes structural features without looking at specific content:
 - Encoding trick detection (base64, Unicode escapes, homoglyphs)
 - URL counting (data exfiltration signals)
 
+## L5 — Negative Selection (Anomaly Detection)
+
+**Latency:** < 1ms | **Dependencies:** scikit-learn
+
+Learns what "normal" prompts look like and flags deviations. Catches zero-day attacks that don't resemble any known pattern.
+
+- **Isolation Forest** trained on 5,000 benign prompts from 5 HuggingFace sources
+- 11 statistical features: word/char/sentence counts, average lengths, imperative verb ratio, question ratio, special char density, Shannon entropy, uppercase ratio, vocabulary diversity
+- Flags text with anomalous structure regardless of content
+- Train with: `python scripts/train_l5_model.py`
+
 ## Meta-Classifier Fusion
 
-A trained logistic regression model combines all 4 layer scores with interaction features:
+A trained logistic regression model combines layer scores with interaction features:
 
-**Input features (9):**
-- 4 raw layer scores (L1, L2, L3, L4)
+**Input features (9+):**
+- Raw layer scores (L1, L2, L3, L4)
 - Max score across layers
 - Min score across layers
 - L1 × L4 interaction (regex + structural agreement)
 - L2 × L3 interaction (ML + similarity agreement)
 - Number of layers with score > 0.1
+- L5 anomaly boost (additive, pending full retrain)
 
 **Key insights from training:**
-- **L2 × L3 interaction** is a powerful signal — when both DeBERTa and contrastive similarity agree, confidence is very high
-- **Number of agreeing layers** is the second strongest signal
-- L3/L4 raw coefficients are clamped to non-negative to prevent adversarial exploitation
-- **Threshold jitter** (σ=0.03) randomizes the decision boundary per-request, preventing attackers from binary-searching the exact threshold
+- **L3 (contrastive)** is now a strong positive signal after fine-tuning
+- **L2 × L3 interaction** is powerful — when both DeBERTa and contrastive similarity agree
+- **Number of agreeing layers** is a strong signal
+- Negative coefficients are clamped to 0 to prevent adversarial exploitation
+- **Threshold jitter** (σ=0.03) randomizes the decision boundary per-request
 
 **Output:** Risk score (0.0-1.0) via sigmoid, thresholded into ALLOW / WARN / BLOCK.
+
+## Council Mode (Optional LLM Judge)
+
+When the engine is uncertain (`needs_council=True`), an optional local LLM provides a second opinion:
+
+- **Provider:** ollama with Phi-3-mini (extensible to OpenRouter)
+- **Prompt:** Anti-injection hardened template (instructions after user text)
+- **Veto power:** MALICIOUS+HIGH → override to BLOCK, SAFE+HIGH → override to ALLOW
+- **Fallback:** configurable (warn or block) when LLM unavailable
+- **Analytics:** council verdicts persisted in SQLite dashboard
+
+Configure in `.prompt-armor.yml`:
+```yaml
+council:
+  enabled: true
+  timeout_s: 5
+  fallback_decision: warn
+  providers:
+    - type: ollama
+      model: phi3:mini
+```
 
 ## Session-Level Inflammation Cascade
 
