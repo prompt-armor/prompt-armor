@@ -135,14 +135,19 @@ class AnalyticsCollector:
         conn.execute("PRAGMA synchronous=NORMAL;")
 
         batch_count = 0
+        _BATCH_SIZE = 100  # Commit every N records for performance
 
         while self._running:
             try:
                 item = self._queue.get(timeout=1.0)
             except Empty:
+                # Commit any pending writes on idle
+                if batch_count % _BATCH_SIZE != 0 and batch_count > 0:
+                    conn.commit()
                 continue
 
             if item is None:
+                conn.commit()  # Flush remaining
                 break
 
             text, result = item
@@ -183,9 +188,12 @@ class AnalyticsCollector:
                     result.council_model,
                     result.council_latency_ms,
                 ))
-                conn.commit()
 
                 batch_count += 1
+
+                # Batch commit for performance (every _BATCH_SIZE records)
+                if batch_count % _BATCH_SIZE == 0:
+                    conn.commit()
 
                 # Periodic cleanup
                 if batch_count % 1000 == 0 and self._max_records > 0:
