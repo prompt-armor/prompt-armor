@@ -81,12 +81,21 @@ def run_benchmark(dataset_dir: Path | None = None, output_path: Path | None = No
     print()
 
     # Initialize engine (suppress model loading output)
+    from prompt_armor.config import AnalyticsConfig, ShieldConfig
     from prompt_armor.engine import LiteEngine
+
+    # Enable analytics so benchmark results appear in the dashboard
+    config = ShieldConfig(
+        analytics=AnalyticsConfig(
+            enabled=True,
+            store_prompts=True,
+        ),
+    )
 
     old_stdout = sys.stdout
     sys.stdout = io.StringIO()
     try:
-        engine = LiteEngine()
+        engine = LiteEngine(config=config)
     finally:
         sys.stdout = old_stdout
 
@@ -106,6 +115,7 @@ def run_benchmark(dataset_dir: Path | None = None, output_path: Path | None = No
 
     # Test benign samples (expecting low scores)
     print("Analyzing benign samples...")
+    engine.reset_session()  # Clear inflammation from any prior usage
     for sample in benign_samples:
         try:
             result = engine.analyze(sample["text"])
@@ -120,6 +130,7 @@ def run_benchmark(dataset_dir: Path | None = None, output_path: Path | None = No
 
     # Test malicious samples (expecting high scores)
     print("Analyzing malicious samples...")
+    engine.reset_session()  # Clear inflammation from benign batch
     for sample in malicious_samples:
         try:
             result = engine.analyze(sample["text"])
