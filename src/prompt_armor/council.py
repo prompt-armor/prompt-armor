@@ -55,6 +55,7 @@ def _sanitize_for_council(text: str) -> str:
     """Sanitize user text to prevent delimiter injection in council prompt."""
     return text.replace("===", "---")
 
+
 _TRUNCATE_LENGTH = 200  # chars for privacy_mode="truncated"
 
 
@@ -176,15 +177,17 @@ class OllamaProvider(BaseProvider):
             prompt_text=sanitized_text,
         )
 
-        payload = json.dumps({
-            "model": self._model,
-            "prompt": full_prompt,
-            "stream": False,
-            "options": {
-                "temperature": 0.1,  # Low temp for consistent judgment
-                "num_predict": 100,  # Short response expected
-            },
-        }).encode()
+        payload = json.dumps(
+            {
+                "model": self._model,
+                "prompt": full_prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.1,  # Low temp for consistent judgment
+                    "num_predict": 100,  # Short response expected
+                },
+            }
+        ).encode()
 
         req = urllib.request.Request(
             f"{self._base_url}/api/generate",

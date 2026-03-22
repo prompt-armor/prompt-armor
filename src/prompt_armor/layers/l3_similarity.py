@@ -85,9 +85,7 @@ class L3SimilarityLayer(BaseLayer):
                 if cat == "benign":
                     continue
                 texts.append(entry["text"])
-                self._attack_metadata.append(
-                    {"category": cat, "source": entry.get("source", "unknown")}
-                )
+                self._attack_metadata.append({"category": cat, "source": entry.get("source", "unknown")})
 
         if not texts:
             # Empty index

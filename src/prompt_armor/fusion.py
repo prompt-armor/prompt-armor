@@ -25,15 +25,15 @@ from prompt_armor.models import Category, Decision, LayerResult, ShieldResult
 # L3 (+6.51) and L2 (+5.37) are now the dominant signals.
 # L4/max_score/l2×l3 clamped to 0 (negative = exploitable).
 _META_COEFS = [
-    0.2662,   # l1_regex
-    5.3659,   # l2_classifier (very strong)
-    3.0,      # l3_similarity (capped from 6.51 to prevent FP on short benign prompts)
-    0.0,      # l4_structural (clamped from -3.84)
-    0.0,      # max_score (clamped from -2.01)
-    0.3383,   # min_score
-    4.5146,   # l1 × l4 interaction (very strong)
-    0.0,      # l2 × l3 interaction (clamped from -4.45)
-    2.2368,   # n_layers_above_0.1
+    0.2662,  # l1_regex
+    5.3659,  # l2_classifier (very strong)
+    3.0,  # l3_similarity (capped from 6.51 to prevent FP on short benign prompts)
+    0.0,  # l4_structural (clamped from -3.84)
+    0.0,  # max_score (clamped from -2.01)
+    0.3383,  # min_score
+    4.5146,  # l1 × l4 interaction (very strong)
+    0.0,  # l2 × l3 interaction (clamped from -4.45)
+    2.2368,  # n_layers_above_0.1
 ]
 _META_INTERCEPT = -4.5620
 _META_THRESHOLD = 0.65  # Optimal F1 threshold on held-out set (F1=0.980)
@@ -102,11 +102,14 @@ def fuse_results(
     # --- Meta-classifier fusion ---
     # Build feature vector (same as training)
     features = [
-        l1, l2, l3, l4,
-        max(l1, l2, l3, l4),       # max_score
-        min(l1, l2, l3, l4),       # min_score
-        l1 * l4,                   # l1 × l4 interaction
-        l2 * l3,                   # l2 × l3 interaction
+        l1,
+        l2,
+        l3,
+        l4,
+        max(l1, l2, l3, l4),  # max_score
+        min(l1, l2, l3, l4),  # min_score
+        l1 * l4,  # l1 × l4 interaction
+        l2 * l3,  # l2 × l3 interaction
         sum(1.0 for x in [l1, l2, l3, l4] if x > 0.1),  # n_above_0.1 (L5 excluded until retrain)
     ]
 
