@@ -57,10 +57,7 @@ def _extract_l5_features(text: str) -> np.ndarray:
     f_question_ratio = question_marks / sentence_count
 
     # 8: Special character density
-    special = sum(
-        1 for c in text
-        if not c.isalnum() and c not in " \t\n.,!?;:'-\"()[]{}/"
-    )
+    special = sum(1 for c in text if not c.isalnum() and c not in " \t\n.,!?;:'-\"()[]{}/")
     f_special_density = special / char_count
 
     # 9: Shannon entropy
@@ -68,6 +65,7 @@ def _extract_l5_features(text: str) -> np.ndarray:
         f_entropy = 0.0
     else:
         from collections import Counter
+
         freq = Counter(text)
         length = len(text)
         f_entropy = -sum((c / length) * math.log2(c / length) for c in freq.values())
@@ -80,13 +78,22 @@ def _extract_l5_features(text: str) -> np.ndarray:
     unique_words = len(set(words))
     f_unique_ratio = unique_words / word_count
 
-    return np.array([
-        f_word_count, f_char_count, f_sentence_count,
-        f_avg_word_length, f_avg_sentence_length,
-        f_imperative_ratio, f_question_ratio,
-        f_special_density, f_entropy,
-        f_uppercase_ratio, f_unique_ratio,
-    ], dtype=np.float32)
+    return np.array(
+        [
+            f_word_count,
+            f_char_count,
+            f_sentence_count,
+            f_avg_word_length,
+            f_avg_sentence_length,
+            f_imperative_ratio,
+            f_question_ratio,
+            f_special_density,
+            f_entropy,
+            f_uppercase_ratio,
+            f_unique_ratio,
+        ],
+        dtype=np.float32,
+    )
 
 
 class L5NegativeSelectionLayer(BaseLayer):
@@ -105,10 +112,7 @@ class L5NegativeSelectionLayer(BaseLayer):
         import joblib
 
         if not _MODEL_PATH.exists():
-            raise FileNotFoundError(
-                f"L5 model not found at {_MODEL_PATH}. "
-                "Run: python scripts/train_l5_model.py"
-            )
+            raise FileNotFoundError(f"L5 model not found at {_MODEL_PATH}. Run: python scripts/train_l5_model.py")
 
         data = joblib.load(_MODEL_PATH)
         self._model = data["model"]

@@ -140,9 +140,9 @@ class LiteEngine:
     """
 
     # Inflammation parameters
-    _INFLAMMATION_BOOST = 0.25   # threshold reduction per WARN
-    _INFLAMMATION_DECAY = 0.7    # exponential decay per request
-    _MAX_INFLAMMATION = 0.15     # max threshold reduction
+    _INFLAMMATION_BOOST = 0.25  # threshold reduction per WARN
+    _INFLAMMATION_DECAY = 0.7  # exponential decay per request
+    _MAX_INFLAMMATION = 0.15  # max threshold reduction
 
     # Class-level tracking to prevent atexit handler accumulation
     _active_engines: weakref.WeakSet = weakref.WeakSet()
@@ -193,10 +193,7 @@ class LiteEngine:
         Uses per-layer timeout and fail-open: if a layer hangs or crashes,
         analysis proceeds with the remaining layers.
         """
-        futures = {
-            self._pool.submit(layer.analyze, text): layer.name
-            for layer in self._layers
-        }
+        futures = {self._pool.submit(layer.analyze, text): layer.name for layer in self._layers}
         layer_results = []
         for future in futures:
             layer_name = futures[future]
@@ -280,11 +277,7 @@ class LiteEngine:
             logger.warning("Council failed: %s, using fallback", e)
 
         # Fallback: use configured fallback decision
-        fallback = (
-            Decision.WARN
-            if self._config.council.fallback_decision == "warn"
-            else Decision.BLOCK
-        )
+        fallback = Decision.WARN if self._config.council.fallback_decision == "warn" else Decision.BLOCK
         return ShieldResult(
             risk_score=result.risk_score,
             confidence=result.confidence,

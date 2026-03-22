@@ -122,9 +122,7 @@ class AnalyticsCollector:
     def _start_writer(self) -> None:
         """Start the background writer thread."""
         self._running = True
-        self._thread = threading.Thread(
-            target=self._writer_loop, daemon=True, name="prompt-armor-collector"
-        )
+        self._thread = threading.Thread(target=self._writer_loop, daemon=True, name="prompt-armor-collector")
         self._thread.start()
 
     def _writer_loop(self) -> None:
@@ -156,38 +154,41 @@ class AnalyticsCollector:
                 prompt_hash = hashlib.sha256(text.encode()).hexdigest()[:16]
                 prompt_text = text if self._store_prompts else None
                 categories = json.dumps([c.value for c in result.categories])
-                evidence = json.dumps([
-                    {
-                        "layer": e.layer,
-                        "category": e.category.value,
-                        "description": e.description,
-                        "score": e.score,
-                    }
-                    for e in result.evidence
-                ])
-                layer_scores = json.dumps({
-                    lr.layer: lr.score for lr in result.layer_results
-                })
+                evidence = json.dumps(
+                    [
+                        {
+                            "layer": e.layer,
+                            "category": e.category.value,
+                            "description": e.description,
+                            "score": e.score,
+                        }
+                        for e in result.evidence
+                    ]
+                )
+                layer_scores = json.dumps({lr.layer: lr.score for lr in result.layer_results})
 
-                conn.execute(_INSERT, (
-                    prompt_hash,
-                    prompt_text,
-                    len(text),
-                    result.risk_score,
-                    result.confidence,
-                    result.decision.value,
-                    categories,
-                    evidence,
-                    layer_scores,
-                    result.latency_ms,
-                    int(result.needs_council),
-                    result.lite_decision,
-                    result.council_decision,
-                    result.council_reasoning,
-                    result.council_confidence,
-                    result.council_model,
-                    result.council_latency_ms,
-                ))
+                conn.execute(
+                    _INSERT,
+                    (
+                        prompt_hash,
+                        prompt_text,
+                        len(text),
+                        result.risk_score,
+                        result.confidence,
+                        result.decision.value,
+                        categories,
+                        evidence,
+                        layer_scores,
+                        result.latency_ms,
+                        int(result.needs_council),
+                        result.lite_decision,
+                        result.council_decision,
+                        result.council_reasoning,
+                        result.council_confidence,
+                        result.council_model,
+                        result.council_latency_ms,
+                    ),
+                )
 
                 batch_count += 1
 

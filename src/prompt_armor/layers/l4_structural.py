@@ -295,9 +295,22 @@ def _instruction_override_ratio(words: list[str], word_count: int) -> float:
 
 # Roles that are commonly benign — dampen score when detected
 _BENIGN_ROLES = {
-    "tutor", "teacher", "assistant", "helper", "translator", "editor",
-    "proofreader", "summarizer", "mentor", "guide", "advisor", "coach",
-    "reviewer", "checker", "formatter", "narrator",
+    "tutor",
+    "teacher",
+    "assistant",
+    "helper",
+    "translator",
+    "editor",
+    "proofreader",
+    "summarizer",
+    "mentor",
+    "guide",
+    "advisor",
+    "coach",
+    "reviewer",
+    "checker",
+    "formatter",
+    "narrator",
 }
 
 
@@ -365,10 +378,7 @@ def _detect_encoding_tricks(text: str) -> float:
     for candidate in b64_candidates:
         try:
             decoded = base64.b64decode(candidate).decode("utf-8", errors="ignore")
-            if any(
-                kw in decoded.lower()
-                for kw in ["ignore", "system", "instruction", "password", "secret"]
-            ):
+            if any(kw in decoded.lower() for kw in ["ignore", "system", "instruction", "password", "secret"]):
                 score = max(score, 0.9)
             elif len(decoded) > 10 and decoded.isprintable():
                 score = max(score, 0.5)
@@ -377,9 +387,7 @@ def _detect_encoding_tricks(text: str) -> float:
 
     # Homoglyph detection (Cyrillic/Greek chars in otherwise Latin text)
     latin_count = sum(1 for c in text if "a" <= c.lower() <= "z")
-    non_latin_alpha = sum(
-        1 for c in text if c.isalpha() and not ("a" <= c.lower() <= "z")
-    )
+    non_latin_alpha = sum(1 for c in text if c.isalpha() and not ("a" <= c.lower() <= "z"))
     if latin_count > 10 and non_latin_alpha > 0:
         ratio = non_latin_alpha / (latin_count + non_latin_alpha)
         if 0.01 < ratio < 0.3:  # Mixed scripts — suspicious
@@ -390,11 +398,7 @@ def _detect_encoding_tricks(text: str) -> float:
 
 def _special_char_density(text: str, char_count: int) -> float:
     """Ratio of special/control characters to total length."""
-    special = sum(
-        1
-        for c in text
-        if not c.isalnum() and c not in " \t\n.,!?;:'-\"()[]{}/"
-    )
+    special = sum(1 for c in text if not c.isalnum() and c not in " \t\n.,!?;:'-\"()[]{}/")
     return special / char_count
 
 
@@ -414,15 +418,14 @@ def _length_anomaly(char_count: int) -> float:
 # PARADIGM SHIFT: Instruction-Data Boundary Detection
 # =====================================================================
 
+
 def _classify_sentence_type(sent: str) -> str:
     """Classify a sentence as instruction/question/declaration/meta/delimiter."""
     stripped = sent.strip()
     lower = stripped.lower()
 
     # Delimiter
-    if re.match(r"^[\-=#*]{3,}", stripped) or re.match(
-        r"^[\[{<]\s*/?\s*(system|inst|user|assistant)", lower
-    ):
+    if re.match(r"^[\-=#*]{3,}", stripped) or re.match(r"^[\[{<]\s*/?\s*(system|inst|user|assistant)", lower):
         return "delimiter"
 
     # Question
@@ -481,10 +484,7 @@ def _instruction_data_boundary(text: str) -> tuple[float, float]:
     pivot_score = min(1.0, max(0.0, transitions - 1) * 0.35)
 
     # Late instruction ratio: instructions in the last 40% after seeing data
-    instruction_count_late = sum(
-        1 for i, t in enumerate(types)
-        if t in ("instruction", "meta") and i >= late_zone
-    )
+    instruction_count_late = sum(1 for i, t in enumerate(types) if t in ("instruction", "meta") and i >= late_zone)
     late_ratio = instruction_count_late / max(total - late_zone, 1)
 
     return pivot_score, late_ratio
@@ -495,7 +495,9 @@ def _instruction_data_boundary(text: str) -> tuple[float, float]:
 # =====================================================================
 
 _AUTHORITY_PATTERNS = [
-    re.compile(r"\b(i\s+(am|'m)\s+(the|a|your)\s+(developer|admin|creator|owner|operator|manager|engineer))", re.IGNORECASE),
+    re.compile(
+        r"\b(i\s+(am|'m)\s+(the|a|your)\s+(developer|admin|creator|owner|operator|manager|engineer))", re.IGNORECASE
+    ),
     re.compile(r"\b(openai|anthropic|google|meta)\s+(has\s+)?(approved|authorized|allowed|instructed)", re.IGNORECASE),
     re.compile(r"\b(by\s+order\s+of|on\s+behalf\s+of|authorized\s+by)", re.IGNORECASE),
 ]
@@ -572,6 +574,7 @@ def _manipulation_stack_score(text: str) -> tuple[float, int]:
 # =====================================================================
 # PARADIGM SHIFT: Shannon Entropy (from signal processing)
 # =====================================================================
+
 
 def _char_entropy(text: str) -> float:
     """Shannon entropy of character distribution.

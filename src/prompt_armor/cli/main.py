@@ -150,7 +150,12 @@ def analyze(
     default="table",
     help="Output format",
 )
-@click.option("--fail-on", type=click.Choice(["warn", "block"]), default="block", help="Exit non-zero if any file reaches this level")
+@click.option(
+    "--fail-on",
+    type=click.Choice(["warn", "block"]),
+    default="block",
+    help="Exit non-zero if any file reaches this level",
+)
 def scan(directory: str, pattern: str, fmt: str, fail_on: str) -> None:
     """Batch-scan prompt files in a directory."""
     from prompt_armor.engine import LiteEngine
@@ -175,9 +180,7 @@ def scan(directory: str, pattern: str, fmt: str, fail_on: str) -> None:
     engine.close()
 
     if fmt == "json":
-        output = [
-            {"file": r["file"], **_result_to_dict(r["result"])} for r in results
-        ]
+        output = [{"file": r["file"], **_result_to_dict(r["result"])} for r in results]
         click.echo(json.dumps(output, indent=2))
     elif fmt == "csv":
         click.echo("file,risk_score,confidence,decision,categories")
