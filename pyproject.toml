@@ -41,6 +41,7 @@ ml = [
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
+    "pytest-timeout>=2.0",
     "ruff>=0.4",
     "mypy>=1.8",
     "types-PyYAML>=6.0",
