@@ -21,7 +21,7 @@ function Sidebar() {
           PROMPT ARMOR
         </div>
         <div className="text-[10px] mt-1" style={{ color: '#1f521f' }}>
-          v0.2.0 // dashboard
+          v0.5.0 // dashboard
         </div>
       </div>
 

@@ -19,7 +19,7 @@ from prompt_armor.fusion import fuse_results
 from prompt_armor.layers.base import BaseLayer
 from prompt_armor.layers.l1_regex import L1RegexLayer
 from prompt_armor.layers.l4_structural import L4StructuralLayer
-from prompt_armor.models import ShieldResult
+from prompt_armor.models import Decision, ShieldResult
 
 logger = logging.getLogger("prompt_armor")
 

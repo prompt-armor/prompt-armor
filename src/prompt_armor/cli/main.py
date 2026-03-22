@@ -218,7 +218,7 @@ def config_cmd(show: bool, init: bool) -> None:
             "  l3_similarity: 0.30\n"
             "  l4_structural: 0.20\n\n"
             "thresholds:\n"
-            "  allow_below: 0.3\n"
+            "  allow_below: 0.55\n"
             "  block_above: 0.7\n"
             "  hard_block: 0.95\n"
             "  min_confidence: 0.5\n\n"

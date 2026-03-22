@@ -89,6 +89,8 @@ def _parse_verdict(raw_text: str, model: str, latency_ms: float) -> CouncilVerdi
     m = re.search(r"JUDGMENT\s*:\s*(SAFE|SUSPICIOUS|MALICIOUS)", raw_text, re.IGNORECASE)
     if m:
         judgment = m.group(1).upper()
+    else:
+        logger.warning("Council response missing JUDGMENT field: %s", raw_text[:100])
 
     # Extract CONFIDENCE
     m = re.search(r"CONFIDENCE\s*:\s*(HIGH|MEDIUM|LOW)", raw_text, re.IGNORECASE)
@@ -146,8 +148,8 @@ class OllamaProvider(BaseProvider):
             with urllib.request.urlopen(req, timeout=2) as resp:
                 data = json.loads(resp.read())
                 models = [m.get("name", "") for m in data.get("models", [])]
-                # Check if model name matches (ollama uses "model:tag" format)
-                return any(self._model in m for m in models)
+                # Exact match or prefix match (ollama uses "model:tag" format)
+                return any(m == self._model or m.startswith(self._model + ":") for m in models)
         except Exception:
             return False
 
