@@ -48,13 +48,25 @@ jobs:
         run: |
           uv venv --python ${{ matrix.python-version }}
           uv pip install -e ".[dev,ml,mcp]"
+      - name: Create small attack DB for CI
+        run: |
+          source .venv/bin/activate
+          python -c "
+          import json
+          from pathlib import Path
+          db = Path('src/prompt_armor/data/attacks/known_attacks.jsonl')
+          lines = db.read_text().strip().split('\n')
+          # Keep only first 500 entries for CI speed
+          db.write_text('\n'.join(lines[:500]) + '\n')
+          print(f'CI attack DB: {min(500, len(lines))} entries (from {len(lines)})')
+          "
       - name: Unit tests
-        timeout-minutes: 25
+        timeout-minutes: 20
         run: |
           source .venv/bin/activate
-          pytest tests/unit/ -v --tb=short --timeout=600
+          pytest tests/unit/ -v --tb=short --timeout=300
       - name: Integration tests
-        timeout-minutes: 15
+        timeout-minutes: 10
         run: |
           source .venv/bin/activate
-          pytest tests/integration/ -v --tb=short --timeout=600
+          pytest tests/integration/ -v --tb=short --timeout=300
