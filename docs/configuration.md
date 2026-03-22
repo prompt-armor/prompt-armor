@@ -16,23 +16,31 @@ prompt-armor config --init
 ## Configuration Options
 
 ```yaml
-# Layer weights (normalized to sum to 1.0 for active layers)
-weights:
-  l1_regex: 0.20        # Regex pattern matching
-  l2_classifier: 0.30   # ML/heuristic classifier
-  l3_similarity: 0.30   # Semantic similarity to known attacks
-  l4_structural: 0.20   # Structural feature analysis
-
 # Decision thresholds
 thresholds:
-  allow_below: 0.3      # Score below = ALLOW
+  allow_below: 0.55     # Score below = ALLOW
   block_above: 0.7      # Score above = BLOCK
   hard_block: 0.95      # Any single layer above = instant BLOCK
   min_confidence: 0.5   # Below this = needs_council flag
 
-# Fusion tuning
-convergence_boost: 0.10    # Boost when layers agree
-divergence_penalty: 0.15   # Penalty when layers disagree
+# Analytics dashboard
+analytics:
+  enabled: false         # Set true to record to SQLite
+  db_path: ~/.prompt-armor/analytics.db
+  store_prompts: false   # Set true to see prompts in dashboard
+  retention_days: 30
+  max_records: 100000
+
+# Council mode (optional LLM judge for uncertain cases)
+council:
+  enabled: false
+  timeout_s: 5           # Max wait for LLM response
+  fallback_decision: warn  # warn or block when LLM unavailable
+  providers:
+    - type: ollama       # ollama (local) or openrouter (future)
+      model: phi3:mini
+      base_url: http://localhost:11434
+      privacy_mode: full  # full (local) or truncated (API)
 ```
 
 ## Threshold Profiles

@@ -74,6 +74,7 @@ def fuse_results(
     l2 = score_map.get("l2_classifier", 0.0)
     l3 = score_map.get("l3_similarity", 0.0)
     l4 = score_map.get("l4_structural", 0.0)
+    l5 = score_map.get("l5_negative_selection", 0.0)
 
     scores = [lr.score for lr in layer_results]
     max_score = max(scores)
@@ -106,12 +107,16 @@ def fuse_results(
         min(l1, l2, l3, l4),       # min_score
         l1 * l4,                   # l1 × l4 interaction
         l2 * l3,                   # l2 × l3 interaction
-        sum(1.0 for x in [l1, l2, l3, l4] if x > 0.1),  # n_above_0.1
+        sum(1.0 for x in [l1, l2, l3, l4] if x > 0.1),  # n_above_0.1 (L5 excluded until retrain)
     ]
 
     # Dot product + sigmoid
     logit = sum(f * c for f, c in zip(features, _META_COEFS)) + _META_INTERCEPT
     risk_score = _sigmoid(logit)
+
+    # L5 anomaly boost (additive, pending meta-classifier retrain)
+    if l5 > 0.4:
+        risk_score = min(1.0, risk_score + 0.03 * l5)
 
     # --- Confidence ---
     # High confidence when score is far from threshold

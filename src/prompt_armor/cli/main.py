@@ -218,7 +218,7 @@ def config_cmd(show: bool, init: bool) -> None:
             "  l3_similarity: 0.30\n"
             "  l4_structural: 0.20\n\n"
             "thresholds:\n"
-            "  allow_below: 0.3\n"
+            "  allow_below: 0.55\n"
             "  block_above: 0.7\n"
             "  hard_block: 0.95\n"
             "  min_confidence: 0.5\n\n"
@@ -254,7 +254,14 @@ def _print_rich_result(result: object, prompt: str, verbose: bool) -> None:
         table.add_row("Categories", cats)
     table.add_row("Latency", f"{result.latency_ms:.1f}ms")
 
-    if result.needs_council:
+    if result.council_decision is not None:
+        council_colors = {"SAFE": "green", "SUSPICIOUS": "yellow", "MALICIOUS": "red"}
+        color = council_colors.get(result.council_decision, "white")
+        table.add_row("Council", f"[{color}]{result.council_decision}[/{color}] ({result.council_confidence})")
+        table.add_row("Council Model", result.council_model or "unknown")
+        table.add_row("Council Reasoning", result.council_reasoning or "")
+        table.add_row("Council Latency", f"{result.council_latency_ms:.0f}ms")
+    elif result.needs_council:
         table.add_row("Council", "[cyan]Recommended (uncertainty detected)[/cyan]")
 
     console.print(Panel(table, title="prompt-armor analysis", border_style=_DECISION_COLORS[result.decision]))

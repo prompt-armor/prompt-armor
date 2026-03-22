@@ -2,6 +2,34 @@
 
 All notable changes to prompt-armor will be documented in this file.
 
+## [0.5.0] - 2026-03-22
+
+### Added
+- **Council mode** — optional LLM judge (ollama/phi3:mini) for uncertain cases with veto power, configurable fallback (warn/block), provider abstraction for future OpenRouter
+- **L5 Negative Selection** — Isolation Forest anomaly detection trained on 5,000 benign prompts, catches zero-day attacks via text pattern deviation, <1ms inference
+- **Attack DB 4.5x expansion** — 5,540 → 25,160 entries from 10 sources (SaTML CTF, LLMail-Inject, SafeGuard, jackhhao)
+- **FAISS IVFFlat** — O(sqrt(n)) search for 25K+ vectors, keeps latency <20ms
+- **Dashboard: council verdicts** — council judgment, reasoning, model, latency in all views
+- **Dashboard: configurable refresh** — off/1s/2s/5s/10s/30s/60s, starts paused
+- **Dashboard: local timezone** — timestamps converted to user's browser timezone
+- **Dashboard: council transitions** — shows actual decision changes (e.g., warn → block)
+- `lite_decision` field tracks original Lite decision before council override
+- `scripts/train_l5_model.py` — trains L5 anomaly model (~1min)
+
+### Changed
+- F1: 89.7% → **91.1%**
+- Recall: 93.8% → **98.1%** (only 3 out of 162 attacks pass)
+- Precision: 85.9% → 85.0%
+- L3 coefficient now positive (+3.0) in meta-classifier
+- Avg latency: ~34ms (from ~27ms, 5 layers + larger DB)
+- Version aligned across pyproject.toml, _version.py, dashboard (was mismatched)
+
+### Fixed
+- Missing `Decision` import in engine `_run_council` fallback (would crash)
+- OllamaProvider model matching (substring → exact prefix)
+- CLI config template threshold (0.3 → 0.55 matching actual default)
+- Benchmark now writes to analytics dashboard (was disabled by default)
+
 ## [0.3.0] - 2026-03-21
 
 ### Added

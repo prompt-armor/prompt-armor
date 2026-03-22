@@ -6,7 +6,7 @@
 # Core only (L1 regex + L4 structural, <1ms, ~2MB install)
 pip install prompt-armor
 
-# With ML layers (adds L2 DeBERTa + L3 similarity, ~19ms)
+# With ML layers (adds L2 DeBERTa + L3 similarity + L5 anomaly, ~34ms)
 pip install "prompt-armor[ml]"
 
 # With MCP server support
@@ -27,7 +27,7 @@ print(result.confidence)    # 0.90
 print(result.decision)      # Decision.BLOCK
 print(result.categories)    # (Category.PROMPT_INJECTION, ...)
 print(result.evidence)      # (Evidence(...), ...)
-print(result.latency_ms)    # 19.2
+print(result.latency_ms)    # 34.2
 ```
 
 ## Custom Configuration

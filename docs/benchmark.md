@@ -7,45 +7,46 @@ python tests/benchmark/run_benchmark.py
 python tests/benchmark/run_benchmark.py --output results.json
 ```
 
-## Current Results (v0.3.0)
+## Current Results (v0.5.0)
 
-Dataset: 353 benign + 162 malicious (515 total) from deepset/prompt-injections, TrustAIRLab/in-the-wild-jailbreak-prompts, SaTML CTF 2024, LLMail-Inject, ProtectAI, Lakera/gandalf, and hand-curated samples.
+Dataset: 353 benign + 162 malicious (515 total) from deepset/prompt-injections, TrustAIRLab/in-the-wild-jailbreak-prompts, SaTML CTF 2024, LLMail-Inject, ProtectAI, SafeGuard, jackhhao, Lakera/gandalf, and hand-curated samples.
 
 **Full dataset:**
 
 | Metric | Value |
 |--------|-------|
-| Accuracy | 93.2% |
-| Precision | 85.9% |
-| Recall | 93.8% |
-| F1 Score | **89.7%** |
-| Avg Latency | ~27ms |
-| P95 Latency | ~130ms |
+| Accuracy | 93.98% |
+| Precision | 85.0% |
+| Recall | 98.1% |
+| F1 Score | **91.1%** |
+| Avg Latency | ~34ms |
+| P95 Latency | ~143ms |
 
 ## Methodology
 
-The meta-classifier fusion is trained on 70% of the data and validated on a held-out 30% test set to prevent overfitting. Layer coefficients for L3 (similarity) and L4 (structural) are clamped to non-negative values to prevent adversarial exploitation.
+5 analysis layers run in parallel. A trained logistic regression meta-classifier fuses layer scores with interaction features. Layer coefficients are clamped to non-negative values to prevent adversarial exploitation.
 
-The benchmark includes attacks in English, German, Spanish, French, and Portuguese, covering 8 attack categories.
+L3 uses a contrastive fine-tuned embedding model (TripletLoss) that matches by intent rather than topic. L5 uses an Isolation Forest trained on 5,000 benign prompts to detect anomalous text patterns.
 
-L3 uses a contrastive fine-tuned embedding model (TripletLoss) that matches by intent rather than topic, reducing false positives on security-related benign text.
+The benchmark includes attacks in English, German, Spanish, French, and Portuguese, covering 8 attack categories. Attack DB: 25,160 entries from 10 sources.
 
-## Retraining the Meta-Classifier
+## Retraining
 
-If you change the layers or dataset, retrain the fusion:
+If you change layers or datasets:
 
 ```bash
+# Retrain L3 contrastive embeddings (~70min on CPU)
+python scripts/train_l3_contrastive.py
+
+# Retrain L5 anomaly model (~1min)
+python scripts/train_l5_model.py
+
+# Retrain meta-classifier
 python scripts/dump_layer_scores.py
 python scripts/train_fusion.py
 ```
 
-Then update the `_META_COEFS` in `src/prompt_armor/fusion.py` with the new coefficients.
-
-To retrain L3 contrastive embeddings (~50min on CPU):
-
-```bash
-python scripts/train_l3_contrastive.py
-```
+Then update `_META_COEFS` in `src/prompt_armor/fusion.py` with the new coefficients.
 
 ## Dataset
 

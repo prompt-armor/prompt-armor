@@ -56,7 +56,7 @@ export default function OverviewPage() {
         <h1 className="text-sm uppercase tracking-widest glow">system status</h1>
       </div>
 
-      <div className="grid grid-cols-4 gap-3">
+      <div className={`grid gap-3 ${stats.councilTotal > 0 ? 'grid-cols-5' : 'grid-cols-4'}`}>
         <TerminalCard title="SCANS">
           <div className="text-2xl font-bold glow">{stats.total.toLocaleString()}</div>
           <div className="text-[10px] mt-1" style={{ color: '#1f521f' }}>[24h] {stats.today}</div>
@@ -82,6 +82,31 @@ export default function OverviewPage() {
             {stats.blocksLastHour > 5 ? '[!!] spike detected' : 'last 60 min'}
           </div>
         </TerminalCard>
+
+        {stats.councilTotal > 0 && (
+          <TerminalCard title="COUNCIL">
+            <div className="text-2xl font-bold" style={{ color: '#00ccff' }}>
+              {stats.councilTotal}
+            </div>
+            <div className="text-[10px] mt-1 space-y-0.5">
+              {stats.councilTransitions.length > 0 ? (
+                stats.councilTransitions.map((t, i) => {
+                  const colors: Record<string, string> = { allow: "#33ff00", warn: "#ffb000", block: "#ff3333" };
+                  return (
+                    <div key={i}>
+                      <span style={{ color: colors[t.from_decision] || '#1f521f' }}>{t.from_decision}</span>
+                      <span style={{ color: '#1f521f' }}> → </span>
+                      <span style={{ color: colors[t.to_decision] || '#1f521f' }}>{t.to_decision}</span>
+                      <span style={{ color: '#00ccff' }}> ({t.count})</span>
+                    </div>
+                  );
+                })
+              ) : (
+                <div style={{ color: '#1f521f' }}>no reversals</div>
+              )}
+            </div>
+          </TerminalCard>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-4">

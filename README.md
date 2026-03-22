@@ -2,7 +2,7 @@
   <h1 align="center">prompt-armor</h1>
   <p align="center">
     <strong>The open-source firewall for LLM prompts.</strong><br>
-    Detect prompt injections, jailbreaks, and attacks in ~27ms. No LLM needed. Runs offline.
+    Detect prompt injections, jailbreaks, and attacks in ~34ms. No LLM needed. Runs offline.
   </p>
   <p align="center">
     <a href="https://github.com/prompt-armor/prompt-armor/actions"><img src="https://img.shields.io/github/actions/workflow/status/prompt-armor/prompt-armor/ci.yml?style=flat-square&label=tests" alt="CI"></a>
@@ -16,7 +16,7 @@
 
 Most LLM security tools either need an LLM to work (circular dependency), cost money per request, or return a useless binary "safe/unsafe" with no explanation.
 
-**prompt-armor** runs 4 analysis layers in parallel, fuses their scores via a trained meta-classifier, and tells you *exactly* what was detected, with evidence and confidence — in ~27ms, offline, for free.
+**prompt-armor** runs 5 analysis layers in parallel, fuses their scores via a trained meta-classifier, and tells you *exactly* what was detected, with evidence and confidence — in ~34ms, offline, for free.
 
 ```bash
 pip install prompt-armor
@@ -43,10 +43,10 @@ result.latency_ms   # 12.4
 |--|-----------|-----------|-----------------|-------------|-------|
 | Needs an LLM? | **No** | No | Yes | No | No |
 | Runs offline? | **Yes** | Yes | No | No | Yes |
-| Detection layers | **4 (fused)** | 1 per scanner | 1 (LLM) | ? (proprietary) | 6 (independent) |
+| Detection layers | **5 (fused) + council** | 1 per scanner | 1 (LLM) | ? (proprietary) | 6 (independent) |
 | Score fusion | **Trained meta-classifier** | None | N/A | ? | None |
 | Attack categories | **8** | Binary | N/A | Multi | Binary |
-| Avg latency | **~27ms** | 200-500ms | 1-3s | ~50ms | ~100ms |
+| Avg latency | **~34ms** | 200-500ms | 1-3s | ~50ms | ~100ms |
 | MCP Server | **Yes** | No | No | No | No |
 | CI/CD exit codes | **Yes** | No | No | No | No |
 | License | **Apache 2.0** | MIT | Apache 2.0 | Proprietary | Apache 2.0 |
@@ -70,28 +70,32 @@ result.latency_ms   # 12.4
                  ┌─── L1 Regex         (<1ms)  ───┐
                  │    40+ weighted patterns        │
                  │                                 │
-INPUT ── PRE ────┼─── L2 Classifier    (<5ms)  ───┼─── META-CLASSIFIER ─── GATE ─── OUTPUT
-                 │    DeBERTa-v3 ONNX              │         ▲               │
-                 │                                 │         │               ├─ ALLOW
-                 ├─── L3 Similarity    (<15ms) ───┤         │               ├─ WARN
-                 │    contrastive embeddings+FAISS │         │               ├─ BLOCK
-                 │                                 │         │               └─ needs_council?
-                 └─── L4 Structural    (<2ms)  ───┘         │
-                      boundary, entropy, manipulation       │
-                                                    Threshold jitter (σ=0.03)
-                                                    + inflammation cascade
+                 ├─── L2 Classifier    (<5ms)  ───┤
+                 │    DeBERTa-v3 ONNX              │
+INPUT ── PRE ────┤                                 ├─── META-CLASSIFIER ─── GATE ─── OUTPUT
+                 ├─── L3 Similarity    (<15ms) ───┤         ▲               │
+                 │    contrastive FAISS (25K)      │         │               ├─ ALLOW
+                 │                                 │         │               ├─ WARN
+                 ├─── L4 Structural    (<2ms)  ───┤         │               ├─ BLOCK
+                 │    boundary, entropy, Cialdini   │         │               └─ → Council?
+                 │                                 │    Threshold jitter         (LLM judge)
+                 └─── L5 NegSelection  (<1ms)  ───┘    + inflammation cascade
+                      anomaly detection (IsolationForest)
 ```
 
 **Each layer catches what the others miss:**
 
 - **L1 Regex** — fast pattern matching with contextual modifiers. Catches "ignore previous instructions" and 40+ known patterns. Understands quotes and educational context.
 - **L2 Classifier** — DeBERTa-v3-xsmall (22M params) via ONNX Runtime. Understands semantic intent — catches subtle and indirect attacks that regex can't see.
-- **L3 Similarity** — contrastive fine-tuned embeddings + FAISS cosine similarity against 5,540 known attacks. Matches by *intent*, not topic — won't false-positive on security discussions.
+- **L3 Similarity** — contrastive fine-tuned embeddings + FAISS IVF cosine similarity against 25,160 known attacks. Matches by *intent*, not topic — won't false-positive on security discussions.
 - **L4 Structural** — analyzes structure, not content. Instruction-data boundary detection, manipulation stack (Cialdini's 6 principles), Shannon entropy, delimiter injection, encoding tricks.
+- **L5 Negative Selection** — learns what "normal" prompts look like via Isolation Forest trained on 5,000 benign prompts. Flags anomalous text patterns that don't match any known attack but deviate from normal.
 
-**Fusion** uses a trained logistic regression meta-classifier (9 features) with:
+**Fusion** uses a trained logistic regression meta-classifier with:
 - **Threshold jitter** — per-request randomization prevents adversarial threshold optimization
 - **Inflammation cascade** — session-level threat awareness catches iterative probing attacks
+
+**Council** (optional) — when the engine is uncertain, a local LLM (Phi-3-mini via ollama) provides a second opinion with veto power.
 
 ---
 
@@ -192,19 +196,23 @@ prompt-armor config --init
 `.prompt-armor.yml`:
 
 ```yaml
-weights:
-  l1_regex: 0.20
-  l2_classifier: 0.30
-  l3_similarity: 0.30
-  l4_structural: 0.20
-
 thresholds:
-  allow_below: 0.3     # ALLOW if below
+  allow_below: 0.55    # ALLOW if below
   block_above: 0.7     # BLOCK if above
   hard_block: 0.95     # instant BLOCK if any layer hits this
 
-convergence_boost: 0.10
-divergence_penalty: 0.15
+analytics:
+  enabled: true
+  store_prompts: false  # set true to see prompts in dashboard
+
+# Optional: LLM judge for uncertain cases (requires ollama)
+council:
+  enabled: false
+  timeout_s: 5
+  fallback_decision: warn  # or block
+  providers:
+    - type: ollama
+      model: phi3:mini
 ```
 
 **Conservative preset** (fintech, healthcare):
@@ -229,18 +237,18 @@ thresholds:
 python tests/benchmark/run_benchmark.py
 ```
 
-Results on public dataset (v0.3.0, 515 samples — 353 benign + 162 malicious):
+Results on public dataset (v0.5.0, 515 samples — 353 benign + 162 malicious):
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| **Accuracy** | 93.2% | Full dataset (515 samples) |
-| **Precision** | 85.9% | |
-| **Recall** | 93.8% | Only 10 out of 162 attacks pass |
-| **F1 Score** | **89.7%** | |
-| **Avg Latency** | ~27ms | |
-| **P95 Latency** | ~130ms | |
+| **Accuracy** | 93.98% | Full dataset (515 samples) |
+| **Precision** | 85.0% | |
+| **Recall** | 98.1% | Only 3 out of 162 attacks pass |
+| **F1 Score** | **91.1%** | |
+| **Avg Latency** | ~34ms | 5 layers in parallel |
+| **P95 Latency** | ~143ms | |
 
-Metrics validated on held-out test set (30% of data, never seen during training). Attack DB: 5,540 entries from 8 sources (SaTML CTF, LLMail-Inject, ProtectAI, deepset, TrustAIRLab, Lakera Gandalf, and hand-curated). Multilingual detection covers EN, DE, ES, FR, PT. Dataset is public in `tests/benchmark/dataset/`.
+Attack DB: 25,160 entries from 10 sources (SaTML CTF, LLMail-Inject, ProtectAI, SafeGuard, jackhhao, deepset, TrustAIRLab, Lakera Gandalf, and hand-curated). 5 layers + optional Council (LLM judge). Multilingual detection covers EN, DE, ES, FR, PT. Dataset is public in `tests/benchmark/dataset/`.
 
 ---
 
@@ -371,11 +379,13 @@ prompt-armor/
 │   ├── layers/
 │   │   ├── l1_regex.py      # Pattern matching (40+ rules)
 │   │   ├── l2_classifier.py # DeBERTa-v3 ONNX classifier
-│   │   ├── l3_similarity.py # Contrastive embeddings + FAISS
-│   │   └── l4_structural.py # Boundary, entropy, manipulation
+│   │   ├── l3_similarity.py # Contrastive embeddings + FAISS IVF
+│   │   ├── l4_structural.py # Boundary, entropy, manipulation
+│   │   └── l5_negative_selection.py # Anomaly detection (IsolationForest)
+│   ├── council.py            # Optional LLM judge (ollama)
 │   ├── data/
 │   │   ├── rules/           # L1 regex rules (YAML)
-│   │   └── attacks/         # L3 attack DB (5,540 entries)
+│   │   └── attacks/         # L3 attack DB (25,160 entries)
 │   ├── cli/                 # Click + Rich CLI
 │   └── mcp/                 # MCP server (Python SDK)
 └── tests/
@@ -395,9 +405,10 @@ prompt-armor/
 ## Roadmap
 
 - [x] **v0.1** — Lite engine with 4 layers, CLI, MCP server, benchmark
-- [x] **v0.3** — Paradigm Shift: contrastive L3, 5.5K attack DB, inflammation cascade, F1 89.7%
-- [ ] **v0.4** — Negative selection layer (L5), tiny LLM judge (L6 conditional)
-- [ ] **v1.0** — Production-ready with <0.1% FPR target, Council mode
+- [x] **v0.3** — Paradigm Shift: contrastive L3, 5.5K attack DB, inflammation cascade
+- [x] **v0.4** — Attack DB 25K, FAISS IVF, F1 91%
+- [x] **v0.5** — Council mode (LLM judge), L5 anomaly detection, analytics dashboard
+- [ ] **v1.0** — Production-ready with <0.1% FPR target, multi-judge council (OpenRouter)
 - [ ] **Cloud** — Managed API, dashboard, threat intel feed, continuously updated models
 
 ---

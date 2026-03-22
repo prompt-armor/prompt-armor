@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "prompt-armor"
-version = "0.3.0"
+version = "0.5.0"
 description = "Open-core LLM prompt security analysis — detect prompt injections, jailbreaks, and other attacks"
 readme = "README.md"
 license = "Apache-2.0"
@@ -36,6 +36,7 @@ ml = [
     "onnxruntime>=1.16",
     "sentence-transformers>=2.2",
     "faiss-cpu>=1.7",
+    "scikit-learn>=1.3",
 ]
 dev = [
     "pytest>=7.0",

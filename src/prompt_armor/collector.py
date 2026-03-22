@@ -54,9 +54,21 @@ INSERT INTO analyses (
     prompt_hash, prompt_text, prompt_length,
     risk_score, confidence, decision,
     categories, evidence, layer_scores,
-    latency_ms, needs_council
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    latency_ms, needs_council,
+    lite_decision,
+    council_decision, council_reasoning, council_confidence,
+    council_model, council_latency_ms
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 """
+
+_MIGRATE_COUNCIL = [
+    "ALTER TABLE analyses ADD COLUMN lite_decision TEXT;",
+    "ALTER TABLE analyses ADD COLUMN council_decision TEXT;",
+    "ALTER TABLE analyses ADD COLUMN council_reasoning TEXT;",
+    "ALTER TABLE analyses ADD COLUMN council_confidence TEXT;",
+    "ALTER TABLE analyses ADD COLUMN council_model TEXT;",
+    "ALTER TABLE analyses ADD COLUMN council_latency_ms REAL DEFAULT 0;",
+]
 
 _CLEANUP = """
 DELETE FROM analyses WHERE id NOT IN (
@@ -98,6 +110,12 @@ class AnalyticsCollector:
         conn.execute(_CREATE_TABLE)
         for idx in _CREATE_INDEXES:
             conn.execute(idx)
+        # Migrate: add council columns if missing (idempotent)
+        for stmt in _MIGRATE_COUNCIL:
+            try:
+                conn.execute(stmt)
+            except sqlite3.OperationalError:
+                pass  # Column already exists
         conn.commit()
         conn.close()
 
@@ -158,6 +176,12 @@ class AnalyticsCollector:
                     layer_scores,
                     result.latency_ms,
                     int(result.needs_council),
+                    result.lite_decision,
+                    result.council_decision,
+                    result.council_reasoning,
+                    result.council_confidence,
+                    result.council_model,
+                    result.council_latency_ms,
                 ))
                 conn.commit()
 

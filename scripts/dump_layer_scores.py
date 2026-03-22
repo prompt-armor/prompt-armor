@@ -66,6 +66,7 @@ def dump_scores(output_path: Path) -> None:
                     "l2_classifier": layer_scores.get("l2_classifier", 0.0),
                     "l3_similarity": layer_scores.get("l3_similarity", 0.0),
                     "l4_structural": layer_scores.get("l4_structural", 0.0),
+                    "l5_negative_selection": layer_scores.get("l5_negative_selection", 0.0),
                     "text_preview": entry["text"][:80],
                 })
 
@@ -81,7 +82,7 @@ def dump_scores(output_path: Path) -> None:
     print(f"Saved to {output_path}")
 
     # Quick stats per layer
-    for layer in ["l1_regex", "l2_classifier", "l3_similarity", "l4_structural"]:
+    for layer in ["l1_regex", "l2_classifier", "l3_similarity", "l4_structural", "l5_negative_selection"]:
         pos_scores = [s[layer] for s in samples if s["label"] == 1]
         neg_scores = [s[layer] for s in samples if s["label"] == 0]
         print(f"\n{layer}:")

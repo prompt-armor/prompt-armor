@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-prompt-armor is an open-core LLM prompt security analysis tool. It detects prompt injections, jailbreaks, and other attacks against LLMs. The Lite engine runs 4 analysis layers in parallel, fuses scores via a trained meta-classifier, and returns decisions in ~27ms offline. F1: 89.7% on 515-sample benchmark.
+prompt-armor is an open-core LLM prompt security analysis tool. It detects prompt injections, jailbreaks, and other attacks against LLMs. The Lite engine runs 4 analysis layers in parallel, fuses scores via a trained meta-classifier, and returns decisions in ~27ms offline. F1: 91% on 515-sample benchmark.
 
 ## Commands
 
@@ -38,8 +38,8 @@ prompt-armor-mcp
 python scripts/dump_layer_scores.py
 python scripts/train_fusion.py
 
-# Rebuild attack database from public sources
-python scripts/build_attack_db.py
+# Rebuild attack database from public sources (25K+ entries)
+python scripts/build_attack_db.py --max-per-source 20000
 
 # Contrastive fine-tune L3 embeddings (~50min on CPU)
 python scripts/train_l3_contrastive.py
@@ -58,12 +58,13 @@ The core pipeline runs 4 analysis layers **in parallel** via `ThreadPoolExecutor
 - **`engine.py` (LiteEngine)** — Orchestrates: Unicode normalization, sliding window segmentation, parallel layer dispatch, per-layer timeout (2s) with fail-open. **Inflammation cascade**: session-level threat awareness with exponential decay.
 - **`layers/l1_regex.py`** — 40+ English + 20 multilingual (DE/ES/FR/PT) weighted regex rules. Context modifier exploit hardened (high scores not dampened).
 - **`layers/l2_classifier.py`** — DeBERTa-v3-xsmall (22M params, ONNX) with score calibration. Auto-downloads from HuggingFace on first use. Falls back to keyword heuristic.
-- **`layers/l3_similarity.py`** — **Contrastive fine-tuned** MiniLM-L12-v2 + FAISS cosine similarity against 5,540 known attacks. Intent-based matching (not topic-based).
+- **`layers/l3_similarity.py`** — **Contrastive fine-tuned** MiniLM-L12-v2 + FAISS IVF cosine similarity against 25,160 known attacks. Intent-based matching (not topic-based).
 - **`layers/l4_structural.py`** — Instruction-data boundary detection, manipulation stack (Cialdini's 6 principles), Shannon entropy, delimiter injection, encoding tricks, role assignment.
 - **`fusion.py`** — Trained LogisticRegression meta-classifier (9 features). Threshold jitter (σ=0.03) prevents adversarial optimization. L3/L4 raw coefficients clamped to 0.
 - **`models.py`** — Frozen dataclasses: `ShieldResult`, `LayerResult`, `Evidence`, `Decision`, `Category`.
 - **`config.py`** — Pydantic models for YAML config (`.prompt-armor.yml`).
 - **`collector.py`** — SQLite analytics writer with WAL mode, background thread, non-blocking queue.
+- **`council.py`** — Optional LLM judge for uncertain cases. Provider abstraction (ollama v1, OpenRouter future). Anti-injection hardened prompt template.
 
 ### Key conventions
 
@@ -78,7 +79,7 @@ The core pipeline runs 4 analysis layers **in parallel** via `ThreadPoolExecutor
 ### Data files
 
 - `data/rules/default_rules.yml` — L1 regex rules (EN + DE/ES/FR/PT)
-- `data/attacks/known_attacks.jsonl` — L3 attack DB (5,540 entries)
+- `data/attacks/known_attacks.jsonl` — L3 attack DB (25,160 entries)
 - `data/models/` — L2 ONNX model (auto-downloaded) + L3 contrastive model (trained locally, not in git)
 
 ## Git Workflow (MANDATORY)
