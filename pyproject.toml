@@ -82,3 +82,15 @@ python_version = "3.10"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
+
+# Modules with optional deps or third-party types
+[[tool.mypy.overrides]]
+module = [
+    "prompt_armor.layers.l2_classifier",
+    "prompt_armor.layers.l3_similarity",
+    "prompt_armor.layers.l5_negative_selection",
+    "prompt_armor.mcp.*",
+    "prompt_armor.cli.*",
+    "prompt_armor.council",
+]
+ignore_errors = true

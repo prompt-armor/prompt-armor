@@ -15,7 +15,7 @@ import time
 from collections import Counter
 
 from prompt_armor.config import ShieldConfig
-from prompt_armor.models import Category, Decision, LayerResult, ShieldResult
+from prompt_armor.models import Category, Decision, Evidence, LayerResult, ShieldResult
 
 # --- Trained meta-classifier coefficients ---
 # Learned via LogisticRegressionCV with class_weight='balanced'
@@ -81,19 +81,19 @@ def fuse_results(
 
     # --- Hard block: if any layer has very high confidence score ---
     if max_score >= config.thresholds.hard_block:
-        all_evidence = []
-        all_categories: list[Category] = []
+        hb_evidence: list[Evidence] = []
+        hb_categories: list[Category] = []
         for lr in layer_results:
-            all_evidence.extend(lr.evidence)
-            all_categories.extend(lr.categories)
+            hb_evidence.extend(lr.evidence)
+            hb_categories.extend(lr.categories)
 
         latency = (time.perf_counter() - total_start) * 1000 if total_start else 0.0
         return ShieldResult(
             risk_score=max_score,
             confidence=1.0,
             decision=Decision.BLOCK,
-            categories=tuple(_dedupe_categories(all_categories)),
-            evidence=tuple(all_evidence),
+            categories=tuple(_dedupe_categories(hb_categories)),
+            evidence=tuple(hb_evidence),
             needs_council=False,
             latency_ms=latency,
             layer_results=tuple(layer_results),
@@ -140,7 +140,7 @@ def fuse_results(
     decision = _decide(risk_score, _META_THRESHOLD)
 
     # --- Aggregate evidence and categories ---
-    all_evidence = []
+    all_evidence: list[Evidence] = []
     all_categories: list[Category] = []
     for lr in layer_results:
         all_evidence.extend(lr.evidence)

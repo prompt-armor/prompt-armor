@@ -61,7 +61,7 @@ def _score_bar(score: float, width: int = 20) -> str:
     return f"[{color}]{'█' * filled}{'░' * empty}[/{color}] {score:.2f}"
 
 
-def _result_to_dict(result: object) -> dict:
+def _result_to_dict(result: object) -> dict[str, object]:
     """Convert ShieldResult to a JSON-serializable dict."""
     from prompt_armor.models import ShieldResult
 

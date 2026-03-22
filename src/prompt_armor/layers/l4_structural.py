@@ -329,7 +329,7 @@ def _count_role_assignments(text: str) -> float:
         r"(ahora\s+)?eres\s+(un|una|el|la|mi)",  # ES
         r"tu\s+es\s+(maintenant|désormais)\s+(un|une|le|la)",  # FR
     ]
-    count = 0
+    count: float = 0
     for pat in patterns:
         matches = re.findall(pat, text, re.IGNORECASE)
         count += len(matches)
@@ -339,7 +339,7 @@ def _count_role_assignments(text: str) -> float:
         text_lower = text.lower()
         for role in _BENIGN_ROLES:
             if role in text_lower:
-                count = max(0, count - 0.5)  # Partial dampening
+                count = max(0.0, count - 0.5)  # Partial dampening
                 break
 
     return float(count)
