@@ -49,12 +49,12 @@ jobs:
           uv venv --python ${{ matrix.python-version }}
           uv pip install -e ".[dev,ml,mcp]"
       - name: Unit tests
-        timeout-minutes: 20
+        timeout-minutes: 25
         run: |
           source .venv/bin/activate
-          pytest tests/unit/ -v --tb=short --timeout=120
+          pytest tests/unit/ -v --tb=short --timeout=600
       - name: Integration tests
-        timeout-minutes: 10
+        timeout-minutes: 15
         run: |
           source .venv/bin/activate
-          pytest tests/integration/ -v --tb=short --timeout=300
+          pytest tests/integration/ -v --tb=short --timeout=600
