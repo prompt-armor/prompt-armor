@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { formatLocalTime } from "@/lib/utils";
 
 interface Analysis {
   id: number;
@@ -132,7 +133,7 @@ export default function FeedPage() {
             </div>
           ) : (
             analyses.map((a) => {
-              const ts = a.timestamp.slice(11, 19) || a.timestamp;
+              const ts = formatLocalTime(a.timestamp);
               const scoreColor = a.risk_score < 0.3 ? "#33ff00" : a.risk_score < 0.7 ? "#ffb000" : "#ff3333";
 
               return (

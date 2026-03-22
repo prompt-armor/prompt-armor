@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { formatLocalDateTime } from "@/lib/utils";
 
 interface Analysis {
   id: number;
@@ -99,7 +100,7 @@ function AnalysisContent() {
       <div className="terminal-window">
         <div className="terminal-header">+--- METADATA ---+</div>
         <div className="p-4 space-y-1 text-xs">
-          <div><span style={{ color: '#1f521f' }}>timestamp .. </span>{analysis.timestamp}</div>
+          <div><span style={{ color: '#1f521f' }}>timestamp .. </span>{formatLocalDateTime(analysis.timestamp)}</div>
           <div><span style={{ color: '#1f521f' }}>latency ... </span>{analysis.latency_ms.toFixed(1)}ms</div>
           <div><span style={{ color: '#1f521f' }}>length .... </span>{analysis.prompt_length} chars</div>
           <div><span style={{ color: '#1f521f' }}>hash ...... </span>{analysis.prompt_hash}</div>
