@@ -57,6 +57,16 @@ def _build_layers(config: ShieldConfig) -> list[BaseLayer]:
     except Exception:
         pass
 
+    # Try to load L5 (requires scikit-learn + trained model)
+    try:
+        import sklearn  # noqa: F401
+
+        from prompt_armor.layers.l5_negative_selection import L5NegativeSelectionLayer
+
+        layers.append(L5NegativeSelectionLayer(config))
+    except Exception:
+        pass
+
     return layers
 
 

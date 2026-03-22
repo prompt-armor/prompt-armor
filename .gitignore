@@ -52,3 +52,4 @@ site/
 # Environment
 .env
 .env.local
+src/prompt_armor/data/models/l5_negative_selection.pkl
