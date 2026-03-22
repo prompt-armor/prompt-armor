@@ -86,10 +86,7 @@ export function getOverviewStats(): OverviewStats {
       SUM(CASE WHEN timestamp >= datetime('now', 'localtime', '-1 day') THEN 1 ELSE 0 END) as today,
       SUM(CASE WHEN decision='block' AND timestamp >= datetime('now', 'localtime', '-1 hours') THEN 1 ELSE 0 END) as blocksLastHour,
       SUM(CASE WHEN council_decision IS NOT NULL THEN 1 ELSE 0 END) as councilTotal,
-      SUM(CASE WHEN council_decision IS NOT NULL AND (
-        (council_decision='MALICIOUS' AND council_confidence='HIGH' AND decision='block') OR
-        (council_decision='SAFE' AND council_confidence='HIGH' AND decision='allow')
-      ) THEN 1 ELSE 0 END) as councilReversals
+      SUM(CASE WHEN council_decision IS NOT NULL AND needs_council = 1 AND decision != 'warn' THEN 1 ELSE 0 END) as councilReversals
     FROM analyses
   `).get() as {
     total: number; allow: number; warn: number; block: number;
