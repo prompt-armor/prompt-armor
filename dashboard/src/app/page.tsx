@@ -56,7 +56,7 @@ export default function OverviewPage() {
         <h1 className="text-sm uppercase tracking-widest glow">system status</h1>
       </div>
 
-      <div className="grid grid-cols-4 gap-3">
+      <div className={`grid gap-3 ${stats.councilTotal > 0 ? 'grid-cols-5' : 'grid-cols-4'}`}>
         <TerminalCard title="SCANS">
           <div className="text-2xl font-bold glow">{stats.total.toLocaleString()}</div>
           <div className="text-[10px] mt-1" style={{ color: '#1f521f' }}>[24h] {stats.today}</div>
@@ -82,6 +82,17 @@ export default function OverviewPage() {
             {stats.blocksLastHour > 5 ? '[!!] spike detected' : 'last 60 min'}
           </div>
         </TerminalCard>
+
+        {stats.councilTotal > 0 && (
+          <TerminalCard title="COUNCIL">
+            <div className="text-2xl font-bold" style={{ color: '#00ccff' }}>
+              {stats.councilTotal}
+            </div>
+            <div className="text-[10px] mt-1" style={{ color: '#1f521f' }}>
+              {stats.councilReversals} reversals
+            </div>
+          </TerminalCard>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-4">

@@ -36,6 +36,11 @@ export interface Analysis {
   layer_scores: string;
   latency_ms: number;
   needs_council: number;
+  council_decision: string | null;
+  council_reasoning: string | null;
+  council_confidence: string | null;
+  council_model: string | null;
+  council_latency_ms: number;
 }
 
 export interface OverviewStats {
@@ -47,6 +52,8 @@ export interface OverviewStats {
   avgScore: number;
   today: number;
   blocksLastHour: number;
+  councilTotal: number;
+  councilReversals: number;
 }
 
 export interface CategoryCount {
@@ -72,11 +79,17 @@ export function getOverviewStats(): OverviewStats {
       AVG(latency_ms) as avgLatency,
       AVG(risk_score) as avgScore,
       SUM(CASE WHEN timestamp >= datetime('now', 'localtime', '-1 day') THEN 1 ELSE 0 END) as today,
-      SUM(CASE WHEN decision='block' AND timestamp >= datetime('now', 'localtime', '-1 hours') THEN 1 ELSE 0 END) as blocksLastHour
+      SUM(CASE WHEN decision='block' AND timestamp >= datetime('now', 'localtime', '-1 hours') THEN 1 ELSE 0 END) as blocksLastHour,
+      SUM(CASE WHEN council_decision IS NOT NULL THEN 1 ELSE 0 END) as councilTotal,
+      SUM(CASE WHEN council_decision IS NOT NULL AND (
+        (council_decision='MALICIOUS' AND council_confidence='HIGH' AND decision='block') OR
+        (council_decision='SAFE' AND council_confidence='HIGH' AND decision='allow')
+      ) THEN 1 ELSE 0 END) as councilReversals
     FROM analyses
   `).get() as {
     total: number; allow: number; warn: number; block: number;
     avgLatency: number | null; avgScore: number | null; today: number; blocksLastHour: number;
+    councilTotal: number; councilReversals: number;
   };
 
   return {
@@ -88,6 +101,8 @@ export function getOverviewStats(): OverviewStats {
     avgScore: row.avgScore ?? 0,
     today: row.today,
     blocksLastHour: row.blocksLastHour,
+    councilTotal: row.councilTotal ?? 0,
+    councilReversals: row.councilReversals ?? 0,
   };
 }
 

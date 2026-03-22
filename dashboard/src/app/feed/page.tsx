@@ -13,6 +13,7 @@ interface Analysis {
   prompt_length: number;
   prompt_text: string | null;
   prompt_hash: string;
+  council_decision: string | null;
 }
 
 function DecisionTag({ decision }: { decision: string }) {
@@ -92,6 +93,11 @@ export default function FeedPage() {
                 >
                   <span style={{ color: '#1f521f' }}>[{ts}]</span>
                   <DecisionTag decision={a.decision} />
+                  {a.council_decision && (
+                    <span style={{ color: '#00ccff', fontSize: '9px' }} title={`Council: ${a.council_decision}`}>
+                      [C]
+                    </span>
+                  )}
                   <span style={{ color: scoreColor }}>
                     {a.risk_score.toFixed(2)}
                   </span>
