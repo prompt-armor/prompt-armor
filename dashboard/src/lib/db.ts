@@ -167,28 +167,25 @@ export function getTimeline(hours = 24): TimelinePoint[] {
   const d = getDb();
 
   // Adaptive granularity: <12h = 10min buckets, 12-48h = 1h, >48h = 1 day
-  let format: string;
-  if (hours <= 12) {
-    // 10-minute buckets: 2026-03-20 16:10, 2026-03-20 16:20, ...
-    format = "%Y-%m-%d %H:" + "' || (CAST(strftime('%M', timestamp) AS INT) / 10 * 10) || '";
-  } else if (hours <= 48) {
-    format = "%Y-%m-%d %H:00";
-  } else {
-    format = "%Y-%m-%d";
-  }
+  // Pre-built queries to avoid SQL string interpolation (security hardening)
+  const baseQuery = (fmt: string) => d.prepare(`
+    SELECT
+      strftime('${fmt}', timestamp) as hour,
+      SUM(CASE WHEN decision='allow' THEN 1 ELSE 0 END) as allow,
+      SUM(CASE WHEN decision='warn' THEN 1 ELSE 0 END) as warn,
+      SUM(CASE WHEN decision='block' THEN 1 ELSE 0 END) as block
+    FROM analyses
+    WHERE timestamp >= datetime('now', 'localtime', '-' || ? || ' hours')
+    GROUP BY hour
+    ORDER BY hour
+  `);
 
-  const rows = d
-    .prepare(`
-      SELECT
-        strftime('${format}', timestamp) as hour,
-        SUM(CASE WHEN decision='allow' THEN 1 ELSE 0 END) as allow,
-        SUM(CASE WHEN decision='warn' THEN 1 ELSE 0 END) as warn,
-        SUM(CASE WHEN decision='block' THEN 1 ELSE 0 END) as block
-      FROM analyses
-      WHERE timestamp >= datetime('now', 'localtime', '-' || ? || ' hours')
-      GROUP BY hour
-      ORDER BY hour
-    `)
-    .all(hours) as TimelinePoint[];
-  return rows;
+  // Only 3 possible formats — all hardcoded, no user input in SQL
+  const query = hours <= 12
+    ? baseQuery("%Y-%m-%d %H:' || (CAST(strftime('%M', timestamp) AS INT) / 10 * 10) || '")
+    : hours <= 48
+    ? baseQuery("%Y-%m-%d %H:00")
+    : baseQuery("%Y-%m-%d");
+
+  return query.all(hours) as TimelinePoint[];
 }

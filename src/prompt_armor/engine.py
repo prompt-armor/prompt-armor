@@ -9,8 +9,10 @@ from __future__ import annotations
 import atexit
 import logging
 import re
+import threading
 import time
 import unicodedata
+import weakref
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 
@@ -142,11 +144,16 @@ class LiteEngine:
     _INFLAMMATION_DECAY = 0.7    # exponential decay per request
     _MAX_INFLAMMATION = 0.15     # max threshold reduction
 
+    # Class-level tracking to prevent atexit handler accumulation
+    _active_engines: weakref.WeakSet = weakref.WeakSet()
+    _atexit_registered: bool = False
+
     def __init__(self, config: ShieldConfig | None = None) -> None:
         self._config = config or load_config()
         self._layers = _build_layers(self._config)
         self._pool = ThreadPoolExecutor(max_workers=max(len(self._layers), 1))
         self._inflammation: float = 0.0  # session-level threat awareness
+        self._inflammation_lock = threading.Lock()  # thread-safe inflammation
         self._council = None  # Lazy-initialized when council.enabled
 
         # Initialize layers with fail-open
@@ -174,8 +181,11 @@ class LiteEngine:
             except Exception as e:
                 logger.warning("Analytics init failed: %s", e)
 
-        # Register cleanup on process exit
-        atexit.register(self.close)
+        # Register cleanup on process exit (once, not per instance)
+        LiteEngine._active_engines.add(self)
+        if not LiteEngine._atexit_registered:
+            atexit.register(LiteEngine._cleanup_all)
+            LiteEngine._atexit_registered = True
 
     def _analyze_single(self, text: str, start: float) -> ShieldResult:
         """Run all layers in parallel on a single text segment.
@@ -294,44 +304,44 @@ class LiteEngine:
         If previous requests raised inflammation (WARN/BLOCK), the effective
         risk score gets a small boost, catching iterative probing.
         Inflammation decays exponentially so it doesn't permanently bias.
+        Thread-safe: all inflammation state access is locked.
         """
         from prompt_armor.fusion import _decide, _META_THRESHOLD
-        from prompt_armor.models import Decision
 
-        # Boost risk score by current inflammation level
-        if self._inflammation > 0.01:
-            boosted_score = min(1.0, result.risk_score + self._inflammation)
-            # Only re-decide if score actually changed meaningfully
-            if boosted_score > result.risk_score + 0.005:
-                new_decision = _decide(boosted_score, _META_THRESHOLD)
-                latency = (time.perf_counter() - start) * 1000
-                result = ShieldResult(
-                    risk_score=round(boosted_score, 4),
-                    confidence=result.confidence,
-                    decision=new_decision,
-                    categories=result.categories,
-                    evidence=result.evidence,
-                    needs_council=result.needs_council,
-                    latency_ms=round(latency, 2),
-                    layer_results=result.layer_results,
+        with self._inflammation_lock:
+            # Boost risk score by current inflammation level
+            if self._inflammation > 0.01:
+                boosted_score = min(1.0, result.risk_score + self._inflammation)
+                # Only re-decide if score actually changed meaningfully
+                if boosted_score > result.risk_score + 0.005:
+                    new_decision = _decide(boosted_score, _META_THRESHOLD)
+                    latency = (time.perf_counter() - start) * 1000
+                    result = ShieldResult(
+                        risk_score=round(boosted_score, 4),
+                        confidence=result.confidence,
+                        decision=new_decision,
+                        categories=result.categories,
+                        evidence=result.evidence,
+                        needs_council=result.needs_council,
+                        latency_ms=round(latency, 2),
+                        layer_results=result.layer_results,
+                    )
+
+            # Update inflammation for NEXT request
+            self._inflammation *= self._INFLAMMATION_DECAY
+
+            if result.decision in (Decision.WARN, Decision.BLOCK):
+                self._inflammation = min(
+                    self._MAX_INFLAMMATION,
+                    self._inflammation + self._INFLAMMATION_BOOST * result.risk_score,
                 )
-
-        # Update inflammation for NEXT request
-        # Decay existing inflammation first
-        self._inflammation *= self._INFLAMMATION_DECAY
-
-        # Increase if this request was suspicious
-        if result.decision in (Decision.WARN, Decision.BLOCK):
-            self._inflammation = min(
-                self._MAX_INFLAMMATION,
-                self._inflammation + self._INFLAMMATION_BOOST * result.risk_score,
-            )
 
         return result
 
     def reset_session(self) -> None:
         """Reset inflammation state for a new session."""
-        self._inflammation = 0.0
+        with self._inflammation_lock:
+            self._inflammation = 0.0
 
     @property
     def active_layers(self) -> list[str]:
@@ -343,6 +353,15 @@ class LiteEngine:
         self._pool.shutdown(wait=False)
         if self._collector is not None:
             self._collector.close()
+
+    @classmethod
+    def _cleanup_all(cls) -> None:
+        """Cleanup all active engines on process exit."""
+        for engine in list(cls._active_engines):
+            try:
+                engine.close()
+            except Exception:
+                pass
 
     def __enter__(self) -> LiteEngine:
         return self
