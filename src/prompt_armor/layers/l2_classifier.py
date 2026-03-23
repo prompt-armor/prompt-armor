@@ -235,7 +235,7 @@ class L2ClassifierLayer(BaseLayer):
         # Without calibration, the fusion layer sees compressed scores that
         # underweight L2 relative to L1/L3/L4 which use the full 0-1 range.
         score_floor = 0.23  # typical benign score
-        score_ceil = 0.78   # typical attack score
+        score_ceil = 0.78  # typical attack score
         calibrated = (raw_prob - score_floor) / (score_ceil - score_floor)
         calibrated = max(0.0, min(1.0, calibrated))
 

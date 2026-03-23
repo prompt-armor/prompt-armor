@@ -152,19 +152,13 @@ def run_benchmark(dataset_dir: Path | None = None, output_path: Path | None = No
         metrics.accuracy = round(total_correct / metrics.total_samples, 4)
 
     if metrics.true_positives + metrics.false_positives > 0:
-        metrics.precision = round(
-            metrics.true_positives / (metrics.true_positives + metrics.false_positives), 4
-        )
+        metrics.precision = round(metrics.true_positives / (metrics.true_positives + metrics.false_positives), 4)
 
     if metrics.true_positives + metrics.false_negatives > 0:
-        metrics.recall = round(
-            metrics.true_positives / (metrics.true_positives + metrics.false_negatives), 4
-        )
+        metrics.recall = round(metrics.true_positives / (metrics.true_positives + metrics.false_negatives), 4)
 
     if metrics.precision + metrics.recall > 0:
-        metrics.f1_score = round(
-            2 * (metrics.precision * metrics.recall) / (metrics.precision + metrics.recall), 4
-        )
+        metrics.f1_score = round(2 * (metrics.precision * metrics.recall) / (metrics.precision + metrics.recall), 4)
 
     if latencies:
         latencies.sort()

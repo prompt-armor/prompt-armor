@@ -15,9 +15,10 @@ import unicodedata
 import weakref
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
+from typing import Any
 
 from prompt_armor.config import ShieldConfig, load_config
-from prompt_armor.fusion import fuse_results
+from prompt_armor.fusion import _META_THRESHOLD, _decide, fuse_results
 from prompt_armor.layers.base import BaseLayer
 from prompt_armor.layers.l1_regex import L1RegexLayer
 from prompt_armor.layers.l4_structural import L4StructuralLayer
@@ -140,12 +141,12 @@ class LiteEngine:
     """
 
     # Inflammation parameters
-    _INFLAMMATION_BOOST = 0.25   # threshold reduction per WARN
-    _INFLAMMATION_DECAY = 0.7    # exponential decay per request
-    _MAX_INFLAMMATION = 0.15     # max threshold reduction
+    _INFLAMMATION_BOOST = 0.25  # threshold reduction per WARN
+    _INFLAMMATION_DECAY = 0.7  # exponential decay per request
+    _MAX_INFLAMMATION = 0.15  # max threshold reduction
 
     # Class-level tracking to prevent atexit handler accumulation
-    _active_engines: weakref.WeakSet = weakref.WeakSet()
+    _active_engines: weakref.WeakSet[LiteEngine] = weakref.WeakSet()
     _atexit_registered: bool = False
 
     def __init__(self, config: ShieldConfig | None = None) -> None:
@@ -154,7 +155,7 @@ class LiteEngine:
         self._pool = ThreadPoolExecutor(max_workers=max(len(self._layers), 1))
         self._inflammation: float = 0.0  # session-level threat awareness
         self._inflammation_lock = threading.Lock()  # thread-safe inflammation
-        self._council = None  # Lazy-initialized when council.enabled
+        self._council: Any = None  # Lazy-initialized when council.enabled
 
         # Initialize layers with fail-open
         loaded: list[BaseLayer] = []
@@ -193,10 +194,7 @@ class LiteEngine:
         Uses per-layer timeout and fail-open: if a layer hangs or crashes,
         analysis proceeds with the remaining layers.
         """
-        futures = {
-            self._pool.submit(layer.analyze, text): layer.name
-            for layer in self._layers
-        }
+        futures = {self._pool.submit(layer.analyze, text): layer.name for layer in self._layers}
         layer_results = []
         for future in futures:
             layer_name = futures[future]
@@ -275,16 +273,13 @@ class LiteEngine:
         try:
             verdict = self._council.judge(text, result)
             if verdict is not None:
-                return self._council.apply_veto(result, verdict)
+                result = self._council.apply_veto(result, verdict)
+                return result
         except Exception as e:
             logger.warning("Council failed: %s, using fallback", e)
 
         # Fallback: use configured fallback decision
-        fallback = (
-            Decision.WARN
-            if self._config.council.fallback_decision == "warn"
-            else Decision.BLOCK
-        )
+        fallback = Decision.WARN if self._config.council.fallback_decision == "warn" else Decision.BLOCK
         return ShieldResult(
             risk_score=result.risk_score,
             confidence=result.confidence,
@@ -306,8 +301,6 @@ class LiteEngine:
         Inflammation decays exponentially so it doesn't permanently bias.
         Thread-safe: all inflammation state access is locked.
         """
-        from prompt_armor.fusion import _decide, _META_THRESHOLD
-
         with self._inflammation_lock:
             # Boost risk score by current inflammation level
             if self._inflammation > 0.01:

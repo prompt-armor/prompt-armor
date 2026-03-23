@@ -76,9 +76,9 @@ class ShieldResult:
     council_model: str | None = None
     council_latency_ms: float = 0.0
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         """Convert to a JSON-serializable dict (excludes layer_results)."""
-        d = {
+        d: dict[str, object] = {
             "risk_score": self.risk_score,
             "confidence": self.confidence,
             "decision": self.decision.value,

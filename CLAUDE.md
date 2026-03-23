@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-prompt-armor is an open-core LLM prompt security analysis tool. It detects prompt injections, jailbreaks, and other attacks against LLMs. The Lite engine runs 4 analysis layers in parallel, fuses scores via a trained meta-classifier, and returns decisions in ~27ms offline. F1: 91% on 515-sample benchmark.
+prompt-armor is an open-core LLM prompt security analysis tool. It detects prompt injections, jailbreaks, and other attacks against LLMs. The Lite engine runs 5 analysis layers in parallel, fuses scores via a trained meta-classifier, and returns decisions in ~34ms offline. F1: 91% on 515-sample benchmark.
 
 ## Commands
 
 ```bash
 # Install (editable, with all extras)
-pip install -e ".[dev,mcp]"
+pip install -e ".[dev,ml,mcp]"
 
 # Run tests
 pytest tests/ -v
@@ -48,18 +48,19 @@ python scripts/train_l3_contrastive.py
 ## Architecture
 
 ```
-INPUT → NORMALIZE → SEGMENT (if >150 words) → [L1 | L2 | L3 | L4] → META-CLASSIFIER → GATE (+jitter) → OUTPUT
-                                                                            ↑
-                                                                    inflammation cascade
+INPUT → NORMALIZE → SEGMENT (if >150 words) → [L1 | L2 | L3 | L4 | L5] → META-CLASSIFIER → GATE (+jitter) → OUTPUT
+                                                                                  ↑                        ↓
+                                                                          inflammation cascade      Council (optional)
 ```
 
-The core pipeline runs 4 analysis layers **in parallel** via `ThreadPoolExecutor`, feeds scores into a trained logistic regression meta-classifier, and applies decision thresholds with per-request jitter:
+The core pipeline runs 5 analysis layers **in parallel** via `ThreadPoolExecutor`, feeds scores into a trained logistic regression meta-classifier, and applies decision thresholds with per-request jitter:
 
 - **`engine.py` (LiteEngine)** — Orchestrates: Unicode normalization, sliding window segmentation, parallel layer dispatch, per-layer timeout (2s) with fail-open. **Inflammation cascade**: session-level threat awareness with exponential decay.
 - **`layers/l1_regex.py`** — 40+ English + 20 multilingual (DE/ES/FR/PT) weighted regex rules. Context modifier exploit hardened (high scores not dampened).
 - **`layers/l2_classifier.py`** — DeBERTa-v3-xsmall (22M params, ONNX) with score calibration. Auto-downloads from HuggingFace on first use. Falls back to keyword heuristic.
 - **`layers/l3_similarity.py`** — **Contrastive fine-tuned** MiniLM-L12-v2 + FAISS IVF cosine similarity against 25,160 known attacks. Intent-based matching (not topic-based).
 - **`layers/l4_structural.py`** — Instruction-data boundary detection, manipulation stack (Cialdini's 6 principles), Shannon entropy, delimiter injection, encoding tricks, role assignment.
+- **`layers/l5_negative_selection.py`** — Isolation Forest anomaly detection trained on 5K benign prompts. Catches zero-day attacks via deviation from normal text patterns.
 - **`fusion.py`** — Trained LogisticRegression meta-classifier (9 features). Threshold jitter (σ=0.03) prevents adversarial optimization. L3/L4 raw coefficients clamped to 0.
 - **`models.py`** — Frozen dataclasses: `ShieldResult`, `LayerResult`, `Evidence`, `Decision`, `Category`.
 - **`config.py`** — Pydantic models for YAML config (`.prompt-armor.yml`).

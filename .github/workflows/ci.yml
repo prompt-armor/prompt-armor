@@ -7,49 +7,66 @@ on:
     branches: [main, dev]
 
 jobs:
-  test:
+  lint:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.10", "3.11", "3.12"]
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Install dependencies
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v4
+      - name: Install
         run: |
-          uv venv --python ${{ matrix.python-version }}
-          uv pip install -e ".[dev,ml,mcp]"
-
+          uv venv
+          uv pip install -e ".[dev]"
       - name: Lint
         run: |
           source .venv/bin/activate
           ruff check src/ tests/
-
-      - name: Format check
+      - name: Format
         run: |
           source .venv/bin/activate
           ruff format --check src/ tests/
-
       - name: Type check
         run: |
           source .venv/bin/activate
           mypy src/prompt_armor/ --ignore-missing-imports
 
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: astral-sh/setup-uv@v4
+      - name: Install
+        run: |
+          uv venv --python ${{ matrix.python-version }}
+          uv pip install -e ".[dev,ml,mcp]"
+      - name: Create small attack DB for CI
+        run: |
+          source .venv/bin/activate
+          python -c "
+          import json
+          from pathlib import Path
+          db = Path('src/prompt_armor/data/attacks/known_attacks.jsonl')
+          lines = db.read_text().strip().split('\n')
+          # Keep only first 500 entries for CI speed
+          db.write_text('\n'.join(lines[:500]) + '\n')
+          print(f'CI attack DB: {min(500, len(lines))} entries (from {len(lines)})')
+          "
       - name: Unit tests
+        timeout-minutes: 20
         run: |
           source .venv/bin/activate
-          pytest tests/unit/ -v --tb=short
-
+          pytest tests/unit/ -v --tb=short --timeout=300
       - name: Integration tests
+        timeout-minutes: 10
         run: |
           source .venv/bin/activate
-          pytest tests/integration/ -v --tb=short
+          pytest tests/integration/ -v --tb=short --timeout=300

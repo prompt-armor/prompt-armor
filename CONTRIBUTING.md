@@ -39,11 +39,11 @@ Multilingual rules are welcome (DE, ES, FR, PT, and any other language).
 ### Bug Fixes and Improvements
 
 1. Fork the repo
-2. Create a branch (`git checkout -b fix/your-fix`)
+2. Branch from `dev`: `git checkout dev && git checkout -b fix/your-fix`
 3. Make your changes
 4. Ensure tests pass: `pytest tests/ -v`
 5. Ensure lint passes: `ruff check src/ tests/`
-6. Submit a PR
+6. Submit a PR **targeting `dev`** (not `main`)
 
 ## Development
 
