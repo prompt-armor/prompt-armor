@@ -34,7 +34,7 @@ dependencies = [
 [project.optional-dependencies]
 ml = [
     "onnxruntime>=1.16",
-    "sentence-transformers>=2.2",
+    "tokenizers>=0.15",
     "faiss-cpu>=1.7",
     "scikit-learn>=1.3",
 ]

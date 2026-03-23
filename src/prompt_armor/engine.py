@@ -39,10 +39,9 @@ def _build_layers(config: ShieldConfig) -> list[BaseLayer]:
         L4StructuralLayer(config),
     ]
 
-    # Try to load L3 (requires sentence-transformers + faiss-cpu)
+    # Try to load L3 (requires faiss-cpu + onnxruntime or sentence-transformers)
     try:
         import faiss  # noqa: F401
-        import sentence_transformers  # noqa: F401
 
         from prompt_armor.layers.l3_similarity import L3SimilarityLayer
 
