@@ -2,7 +2,7 @@
   <h1 align="center">prompt-armor</h1>
   <p align="center">
     <strong>The open-source firewall for LLM prompts.</strong><br>
-    Detect prompt injections, jailbreaks, and attacks in ~34ms. No LLM needed. Runs offline.
+    Detect prompt injections, jailbreaks, and attacks in ~27ms. No LLM needed. Runs offline.
   </p>
   <p align="center">
     <a href="https://github.com/prompt-armor/prompt-armor/actions"><img src="https://img.shields.io/github/actions/workflow/status/prompt-armor/prompt-armor/ci.yml?style=flat-square&label=tests" alt="CI"></a>
@@ -16,7 +16,7 @@
 
 Most LLM security tools either need an LLM to work (circular dependency), cost money per request, or return a useless binary "safe/unsafe" with no explanation.
 
-**prompt-armor** runs 5 analysis layers in parallel, fuses their scores via a trained meta-classifier, and tells you *exactly* what was detected, with evidence and confidence — in ~34ms, offline, for free.
+**prompt-armor** runs 5 analysis layers in parallel, fuses their scores via a trained meta-classifier, and tells you *exactly* what was detected, with evidence and confidence — in ~27ms, offline, for free.
 
 ```bash
 pip install prompt-armor
@@ -46,7 +46,7 @@ result.latency_ms   # 12.4
 | Detection layers | **5 (fused) + council** | 1 per scanner | 1 (LLM) | ? (proprietary) | 6 (independent) |
 | Score fusion | **Trained meta-classifier** | None | N/A | ? | None |
 | Attack categories | **8** | Binary | N/A | Multi | Binary |
-| Avg latency | **~34ms** | 200-500ms | 1-3s | ~50ms | ~100ms |
+| Avg latency | **~27ms** | 200-500ms | 1-3s | ~50ms | ~100ms |
 | MCP Server | **Yes** | No | No | No | No |
 | CI/CD exit codes | **Yes** | No | No | No | No |
 | License | **Apache 2.0** | MIT | Apache 2.0 | Proprietary | Apache 2.0 |
@@ -237,16 +237,17 @@ thresholds:
 python tests/benchmark/run_benchmark.py
 ```
 
-Results on public dataset (v0.5.0, 515 samples — 353 benign + 162 malicious):
+Results on public dataset (v0.6.0, 515 samples — 353 benign + 162 malicious):
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| **Accuracy** | 93.98% | Full dataset (515 samples) |
-| **Precision** | 85.0% | |
-| **Recall** | 98.1% | Only 3 out of 162 attacks pass |
-| **F1 Score** | **91.1%** | |
-| **Avg Latency** | ~34ms | 5 layers in parallel |
-| **P95 Latency** | ~143ms | |
+| **Accuracy** | 94.37% | Full dataset (515 samples) |
+| **Precision** | 85.6% | |
+| **Recall** | 98.8% | Only 2 out of 162 attacks pass |
+| **F1 Score** | **91.7%** | |
+| **Avg Latency** | ~27ms | 5 layers in parallel, ONNX L3 |
+| **P95 Latency** | ~209ms | |
+| **Adversarial Recall** | 94.4% | 34/36 crafted evasion prompts detected |
 
 Attack DB: 25,160 entries from 10 sources (SaTML CTF, LLMail-Inject, ProtectAI, SafeGuard, jackhhao, deepset, TrustAIRLab, Lakera Gandalf, and hand-curated). 5 layers + optional Council (LLM judge). Multilingual detection covers EN, DE, ES, FR, PT. Dataset is public in `tests/benchmark/dataset/`.
 
@@ -408,6 +409,7 @@ prompt-armor/
 - [x] **v0.3** — Paradigm Shift: contrastive L3, 5.5K attack DB, inflammation cascade
 - [x] **v0.4** — Attack DB 25K, FAISS IVF, F1 91%
 - [x] **v0.5** — Council mode (LLM judge), L5 anomaly detection, analytics dashboard
+- [x] **v0.6** — L3 ONNX (no PyTorch), adversarial test suite, F1 91.7%
 - [ ] **v1.0** — Production-ready with <0.1% FPR target, multi-judge council (OpenRouter)
 - [ ] **Cloud** — Managed API, dashboard, threat intel feed, continuously updated models
 

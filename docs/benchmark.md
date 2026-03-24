@@ -7,7 +7,7 @@ python tests/benchmark/run_benchmark.py
 python tests/benchmark/run_benchmark.py --output results.json
 ```
 
-## Current Results (v0.5.0)
+## Current Results (v0.6.0)
 
 Dataset: 353 benign + 162 malicious (515 total) from deepset/prompt-injections, TrustAIRLab/in-the-wild-jailbreak-prompts, SaTML CTF 2024, LLMail-Inject, ProtectAI, SafeGuard, jackhhao, Lakera/gandalf, and hand-curated samples.
 
@@ -15,12 +15,13 @@ Dataset: 353 benign + 162 malicious (515 total) from deepset/prompt-injections, 
 
 | Metric | Value |
 |--------|-------|
-| Accuracy | 93.98% |
-| Precision | 85.0% |
-| Recall | 98.1% |
-| F1 Score | **91.1%** |
-| Avg Latency | ~34ms |
-| P95 Latency | ~143ms |
+| Accuracy | 94.37% |
+| Precision | 85.6% |
+| Recall | 98.8% |
+| F1 Score | **91.7%** |
+| Avg Latency | ~27ms |
+| P95 Latency | ~209ms |
+| Adversarial Recall | 94.4% (34/36 evasion prompts) |
 
 ## Methodology
 

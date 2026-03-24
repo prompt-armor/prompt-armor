@@ -6,7 +6,7 @@
 
 - **5 parallel analysis layers** — regex, ML classifier, contrastive semantic similarity, structural analysis, anomaly detection
 - **Trained meta-classifier fusion** — learned optimal layer combination from benchmark data
-- **~34ms latency** — fast enough for real-time API integration
+- **~27ms latency** — fast enough for real-time API integration
 - **Fully offline** — no API keys, no LLM dependency, no network calls during analysis
 - **Multilingual** — EN, DE, ES, FR, PT regex rules + multilingual embeddings
 - **Session awareness** — inflammation cascade catches iterative probing attacks
@@ -32,4 +32,4 @@ print(result.decision)  # Decision.BLOCK
 
 ## Benchmark
 
-F1: **91.1%** | Recall: 98.1% | Precision: 85.0% | Latency: ~34ms | Attack DB: 25,160 entries
+F1: **91.7%** | Recall: 98.8% | Precision: 85.6% | Latency: ~27ms | Attack DB: 25,160 entries | Adversarial: 94.4%
