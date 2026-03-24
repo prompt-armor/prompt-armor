@@ -256,11 +256,11 @@ Attack DB: 25,160 entries from 10 sources (SaTML CTF, LLMail-Inject, ProtectAI, 
 ## Installation
 
 ```bash
-# Core (L1 regex + L2 heuristic + L4 structural — no ML deps, ~2MB)
-pip install prompt-armor
-
-# With ML layers (adds L3 similarity — sentence-transformers + FAISS, ~50MB)
+# With ML layers (recommended — 5 layers, ~50MB, models auto-download)
 pip install "prompt-armor[ml]"
+
+# Core only (L1 regex + L4 structural — no ML deps, ~2MB)
+pip install prompt-armor
 
 # With MCP server
 pip install "prompt-armor[mcp]"
@@ -270,6 +270,12 @@ pip install "prompt-armor[all]"
 ```
 
 **Requirements:** Python 3.10+
+
+### Docker (zero setup)
+
+```bash
+docker run prompt-armor/prompt-armor analyze "Ignore all previous instructions"
+```
 
 ---
 
