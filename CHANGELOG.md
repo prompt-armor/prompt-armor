@@ -2,6 +2,42 @@
 
 All notable changes to prompt-armor will be documented in this file.
 
+## [0.6.0] - 2026-03-23
+
+### Added
+- **L3 ONNX export** — eliminates PyTorch (~2GB) from runtime. Model quantized INT8 (449MB → 113MB). Runtime uses onnxruntime + tokenizers only.
+- **Adversarial test suite** — 46 evasion prompts across 8 categories (regex, classifier, similarity, structural, anomaly, compound, council meta-injection, benign controls). 94.4% adversarial recall.
+- **28 new unit tests** — test_council.py (19): parser, sanitizer, veto logic, config. test_collector.py (9): write, schema, migration, council fields.
+- `scripts/export_l3_onnx.py` — one-time ONNX export + INT8 quantization
+
+### Changed
+- Meta-classifier retrained with L5 as proper feature (10 features, was 9)
+- F1: 91.38% → **91.69%**
+- Recall: 98.15% → **98.77%** (only 2 FN!)
+- Latency: ~34ms → **~27ms** (ONNX L3 is faster than sentence-transformers)
+- Install size: ~2.3GB → **~50MB** (torch eliminated from runtime)
+- Cold start: ~5s → **~1s**
+- `sentence-transformers` moved from `[ml]` to `[dev]` deps (training only)
+
+### Fixed
+- All ruff lint errors (variable naming, import sort, f-strings)
+- All mypy type errors (0 errors in strict mode)
+
+## [0.5.1] - 2026-03-22
+
+### Fixed
+- **Security**: SQL interpolation eliminated in dashboard timeline query
+- **Security**: Council prompt meta-injection hardened (hash nonce + sanitize)
+- **Security**: Inflammation state thread-safe (threading.Lock)
+- **Security**: atexit handler dedup (WeakSet, single registration)
+- **Performance**: Collector batched commits (every 100 records)
+- **CI**: Split lint/test jobs, add timeouts, small attack DB for CI
+- **CI**: All mypy errors resolved (35 → 0)
+- **CI**: All ruff format/lint errors resolved
+- **CI**: L3 detection tests skip on truncated DB
+- **CI**: L2 test thresholds relaxed for cross-platform compat
+- **Docs**: CLAUDE.md 4→5 layers, CONTRIBUTING.md PRs target dev
+
 ## [0.5.0] - 2026-03-22
 
 ### Added
