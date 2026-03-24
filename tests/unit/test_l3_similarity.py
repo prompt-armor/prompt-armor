@@ -31,7 +31,10 @@ def l3() -> L3SimilarityLayer:
     from prompt_armor.layers.l3_similarity import L3SimilarityLayer
 
     layer = L3SimilarityLayer(ShieldConfig())
-    layer.setup()
+    try:
+        layer.setup()
+    except Exception as e:
+        pytest.skip(f"L3 setup failed (no ONNX model or sentence-transformers): {e}")
     return layer
 
 
