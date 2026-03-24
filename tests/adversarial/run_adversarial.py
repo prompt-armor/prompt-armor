@@ -363,7 +363,7 @@ def run_adversarial(output_path: Path | None = None) -> AdversarialReport:
     print(f"  Duration:         {report.duration_s}s")
 
     if report.failed > 0:
-        print(f"\n  FAILURES:")
+        print("\n  FAILURES:")
         for r in report.results:
             if not r.passed:
                 action = "MISSED" if r.should_detect else "FALSE POSITIVE"

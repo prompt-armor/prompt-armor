@@ -23,7 +23,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as f_nn
 from torch.utils.data import DataLoader, Dataset
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -156,7 +156,7 @@ def train(
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 
     # Training
-    print(f"\n3. Training...")
+    print("\n3. Training...")
     print(f"   Epochs: {epochs}")
     print(f"   Batch size: {batch_size}")
     print(f"   Steps/epoch: {len(dataloader)}")
@@ -177,17 +177,17 @@ def train(
             features = {k: v.to(device) for k, v in features.items()}
             out = model.forward(features)
             embeddings = out["sentence_embedding"]
-            embeddings = F.normalize(embeddings, p=2, dim=1)
+            embeddings = f_nn.normalize(embeddings, p=2, dim=1)
 
             bs = len(anchors)
             anchor_emb = embeddings[:bs]
-            positive_emb = embeddings[bs:2*bs]
-            negative_emb = embeddings[2*bs:]
+            positive_emb = embeddings[bs : 2 * bs]
+            negative_emb = embeddings[2 * bs :]
 
             # Triplet loss with cosine distance
-            pos_dist = 1.0 - F.cosine_similarity(anchor_emb, positive_emb)
-            neg_dist = 1.0 - F.cosine_similarity(anchor_emb, negative_emb)
-            loss = F.relu(pos_dist - neg_dist + margin).mean()
+            pos_dist = 1.0 - f_nn.cosine_similarity(anchor_emb, positive_emb)
+            neg_dist = 1.0 - f_nn.cosine_similarity(anchor_emb, negative_emb)
+            loss = f_nn.relu(pos_dist - neg_dist + margin).mean()
 
             # Backward
             loss.backward()
@@ -201,7 +201,7 @@ def train(
 
         avg_loss = epoch_loss / max(n_batches, 1)
         elapsed = time.time() - start_time
-        print(f"   Epoch {epoch+1}/{epochs}: loss={avg_loss:.4f} ({elapsed:.0f}s)")
+        print(f"   Epoch {epoch + 1}/{epochs}: loss={avg_loss:.4f} ({elapsed:.0f}s)")
 
     # Save model
     MODEL_OUTPUT.mkdir(parents=True, exist_ok=True)
@@ -243,7 +243,7 @@ def train(
     print(f"   Cross-sim reduction: {base_cross - cross_sim:+.3f}")
 
     total_time = time.time() - start_time
-    print(f"\n   Total training time: {total_time:.0f}s ({total_time/60:.1f}min)")
+    print(f"\n   Total training time: {total_time:.0f}s ({total_time / 60:.1f}min)")
     print("\n" + "=" * 60)
     print("DONE")
     print("=" * 60)
@@ -251,6 +251,7 @@ def train(
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(description="Contrastive fine-tuning for L3")
     parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--batch-size", type=int, default=32)

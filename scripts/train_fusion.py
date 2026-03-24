@@ -45,31 +45,34 @@ def train_fusion(scores_path: Path, holdout_ratio: float = 0.3) -> None:
         l2 = s["l2_classifier"]
         l3 = s["l3_similarity"]
         l4 = s["l4_structural"]
+        l5 = s.get("l5_negative_selection", 0.0)
 
         features = [
-            l1, l2, l3, l4,           # Raw layer scores
-            max(l1, l2, l3, l4),       # Max score (any-layer signal)
-            min(l1, l2, l3, l4),       # Min score
-            l1 * l4,                   # L1 × L4 interaction (regex + structural)
-            l2 * l3,                   # L2 × L3 interaction (ML + similarity)
-            sum(1 for x in [l1, l2, l3, l4] if x > 0.1),  # Layers above 0.1
+            l1,
+            l2,
+            l3,
+            l4,
+            l5,  # Raw layer scores (5 layers)
+            max(l1, l2, l3, l4, l5),  # Max score (any-layer signal)
+            min(l1, l2, l3, l4, l5),  # Min score
+            l1 * l4,  # L1 × L4 interaction (regex + structural)
+            l2 * l3,  # L2 × L3 interaction (ML + similarity)
+            sum(1 for x in [l1, l2, l3, l4, l5] if x > 0.1),  # Layers above 0.1
         ]
         raw_features.append(features)
         labels.append(s["label"])
 
-    X = np.array(raw_features)
+    x_data = np.array(raw_features)
     y = np.array(labels)
 
-    print(f"Features: {X.shape[1]}")
+    print(f"Features: {x_data.shape[1]}")
     print(f"Positive: {y.sum()}, Negative: {(1 - y).sum()}")
     print()
 
     # Train/test split for honest out-of-sample evaluation
     from sklearn.model_selection import train_test_split
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=holdout_ratio, random_state=42, stratify=y
-    )
+    x_train, x_test, y_train, y_test = train_test_split(x_data, y, test_size=holdout_ratio, random_state=42, stratify=y)
     print(f"Train: {len(y_train)} ({y_train.sum()} pos)  Test: {len(y_test)} ({y_test.sum()} pos)")
     print()
 
@@ -83,19 +86,19 @@ def train_fusion(scores_path: Path, holdout_ratio: float = 0.3) -> None:
         max_iter=2000,
         random_state=42,
     )
-    clf.fit(X_train, y_train)
+    clf.fit(x_train, y_train)
 
     print(f"Best C: {clf.C_[0]:.4f}")
     print()
 
     # === TRAIN SET METRICS (for reference) ===
-    y_pred_train = clf.predict(X_train)
+    y_pred_train = clf.predict(x_train)
     print("=== Train Set Metrics ===")
     print(classification_report(y_train, y_pred_train, target_names=["benign", "malicious"]))
 
     # === HELD-OUT TEST SET METRICS (honest) ===
-    y_pred_test = clf.predict(X_test)
-    y_prob_test = clf.predict_proba(X_test)[:, 1]
+    y_pred_test = clf.predict(x_test)
+    y_prob_test = clf.predict_proba(x_test)[:, 1]
 
     print("=== HELD-OUT Test Set Metrics (HONEST) ===")
     print(classification_report(y_test, y_pred_test, target_names=["benign", "malicious"]))
@@ -142,8 +145,16 @@ def train_fusion(scores_path: Path, holdout_ratio: float = 0.3) -> None:
     intercept = clf.intercept_[0]
 
     feature_names = [
-        "l1_regex", "l2_classifier", "l3_similarity", "l4_structural",
-        "max_score", "min_score", "l1_x_l4", "l2_x_l3", "n_above_0.1",
+        "l1_regex",
+        "l2_classifier",
+        "l3_similarity",
+        "l4_structural",
+        "l5_negative_selection",
+        "max_score",
+        "min_score",
+        "l1_x_l4",
+        "l2_x_l3",
+        "n_above_0.1",
     ]
 
     print()
