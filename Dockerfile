@@ -7,11 +7,13 @@ LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 WORKDIR /app
 
-# Install prompt-armor with ML layers
-RUN pip install --no-cache-dir "prompt-armor[ml]" && \
-    # Pre-download L2 model (DeBERTa ONNX, ~83MB)
+# Copy source
+COPY . .
+
+# Install from source with ML layers
+RUN pip install --no-cache-dir -e ".[ml]" && \
+    # Pre-download all models (L2 DeBERTa + L3 ONNX + L5 IsolationForest)
     python -c "from prompt_armor.engine import LiteEngine; e = LiteEngine(); print(f'Layers: {e.active_layers}'); e.close()" && \
-    # Cleanup pip cache
     rm -rf /root/.cache/pip
 
 ENTRYPOINT ["prompt-armor"]
