@@ -31,42 +31,107 @@ DEFAULT_OUTPUT = Path(__file__).parent.parent / "src" / "prompt_armor" / "data" 
 # Category mapping for auto-categorization
 CATEGORY_KEYWORDS = {
     "jailbreak": [
-        "DAN", "STAN", "jailbreak", "do anything now", "no restrictions",
-        "no limitations", "no filters", "unfiltered", "uncensored", "unrestricted",
-        "developer mode", "god mode", "admin mode", "without restrictions",
-        "pretend you", "act as", "roleplay", "you are now", "two responses",
-        "dual response", "evil", "no ethical", "no moral", "bypass safety",
+        "DAN",
+        "STAN",
+        "jailbreak",
+        "do anything now",
+        "no restrictions",
+        "no limitations",
+        "no filters",
+        "unfiltered",
+        "uncensored",
+        "unrestricted",
+        "developer mode",
+        "god mode",
+        "admin mode",
+        "without restrictions",
+        "pretend you",
+        "act as",
+        "roleplay",
+        "you are now",
+        "two responses",
+        "dual response",
+        "evil",
+        "no ethical",
+        "no moral",
+        "bypass safety",
     ],
     "prompt_injection": [
-        "ignore previous", "ignore all", "disregard", "forget your",
-        "override", "new instructions", "actual instructions", "real instructions",
-        "from now on", "instead do", "do not follow", "scratch that",
+        "ignore previous",
+        "ignore all",
+        "disregard",
+        "forget your",
+        "override",
+        "new instructions",
+        "actual instructions",
+        "real instructions",
+        "from now on",
+        "instead do",
+        "do not follow",
+        "scratch that",
     ],
     "system_prompt_leak": [
-        "system prompt", "initial prompt", "repeat your", "show your instructions",
-        "what were you told", "print everything above", "reveal your",
-        "hidden instructions", "secret instructions", "original prompt",
+        "system prompt",
+        "initial prompt",
+        "repeat your",
+        "show your instructions",
+        "what were you told",
+        "print everything above",
+        "reveal your",
+        "hidden instructions",
+        "secret instructions",
+        "original prompt",
     ],
     "identity_override": [
-        "you are no longer", "forget that you are", "your name is now",
-        "you are not", "stop being", "new identity", "new persona",
+        "you are no longer",
+        "forget that you are",
+        "your name is now",
+        "you are not",
+        "stop being",
+        "new identity",
+        "new persona",
     ],
     "data_exfiltration": [
-        "send to", "forward to", "email to", "http://", "https://",
-        "hidden link", "hidden image", "markdown image", "exfiltrate",
+        "send to",
+        "forward to",
+        "email to",
+        "http://",
+        "https://",
+        "hidden link",
+        "hidden image",
+        "markdown image",
+        "exfiltrate",
     ],
     "social_engineering": [
-        "i am the developer", "i am the admin", "authorized test",
-        "security audit", "urgent override", "emergency", "i work for",
-        "openai employee", "anthropic employee",
+        "i am the developer",
+        "i am the admin",
+        "authorized test",
+        "security audit",
+        "urgent override",
+        "emergency",
+        "i work for",
+        "openai employee",
+        "anthropic employee",
     ],
     "encoding_attack": [
-        "base64", "rot13", "hex", "unicode", "\\u00", "decode this",
-        "translate from binary", "ascii art",
+        "base64",
+        "rot13",
+        "hex",
+        "unicode",
+        "\\u00",
+        "decode this",
+        "translate from binary",
+        "ascii art",
     ],
     "instruction_bypass": [
-        "<|im_start|>", "<|im_end|>", "[SYSTEM]", "[/SYSTEM]",
-        "### system", "### user", "### assistant", "<|endoftext|>",
+        "<|im_start|>",
+        "<|im_end|>",
+        "[SYSTEM]",
+        "[/SYSTEM]",
+        "### system",
+        "### user",
+        "### assistant",
+        "<|endoftext|>",
     ],
 }
 
@@ -116,22 +181,26 @@ def load_existing(path: Path) -> list[dict]:
 # Original sources (Phase 1)
 # =====================================================================
 
+
 def fetch_deepset_injections() -> list[dict]:
     """Fetch deepset/prompt-injections dataset."""
     print("  Fetching deepset/prompt-injections...")
     try:
         from datasets import load_dataset
+
         ds = load_dataset("deepset/prompt-injections", split="train")
         entries = []
         for row in ds:
             if row["label"] == 1:
                 text = normalize_text(row["text"])
                 if 10 < len(text) < 2000:
-                    entries.append({
-                        "text": text,
-                        "category": classify_prompt(text),
-                        "source": "deepset/prompt-injections",
-                    })
+                    entries.append(
+                        {
+                            "text": text,
+                            "category": classify_prompt(text),
+                            "source": "deepset/prompt-injections",
+                        }
+                    )
         print(f"    Got {len(entries)} injection prompts")
         return entries
     except Exception as e:
@@ -144,6 +213,7 @@ def fetch_trustai_jailbreaks() -> list[dict]:
     print("  Fetching TrustAIRLab/in-the-wild-jailbreak-prompts...")
     try:
         from datasets import load_dataset
+
         ds = load_dataset(
             "TrustAIRLab/in-the-wild-jailbreak-prompts",
             "jailbreak_2023_12_25",
@@ -155,11 +225,13 @@ def fetch_trustai_jailbreaks() -> list[dict]:
                 continue
             text = normalize_text(row.get("prompt", ""))
             if 10 < len(text) < 2000:
-                entries.append({
-                    "text": text,
-                    "category": classify_prompt(text),
-                    "source": "trustai/in-the-wild",
-                })
+                entries.append(
+                    {
+                        "text": text,
+                        "category": classify_prompt(text),
+                        "source": "trustai/in-the-wild",
+                    }
+                )
         print(f"    Got {len(entries)} jailbreak prompts")
         return entries
     except Exception as e:
@@ -172,16 +244,19 @@ def fetch_chatgpt_jailbreaks() -> list[dict]:
     print("  Fetching rubend18/ChatGPT-Jailbreak-Prompts...")
     try:
         from datasets import load_dataset
+
         ds = load_dataset("rubend18/ChatGPT-Jailbreak-Prompts", split="train")
         entries = []
         for row in ds:
             text = normalize_text(row.get("Prompt", ""))
             if 10 < len(text) < 3000:
-                entries.append({
-                    "text": text,
-                    "category": "jailbreak",
-                    "source": "jailbreakchat",
-                })
+                entries.append(
+                    {
+                        "text": text,
+                        "category": "jailbreak",
+                        "source": "jailbreakchat",
+                    }
+                )
         print(f"    Got {len(entries)} jailbreak prompts")
         return entries
     except Exception as e:
@@ -194,16 +269,19 @@ def fetch_gandalf() -> list[dict]:
     print("  Fetching Lakera/gandalf_ignore_instructions...")
     try:
         from datasets import load_dataset
+
         ds = load_dataset("Lakera/gandalf_ignore_instructions", split="train")
         entries = []
         for row in ds:
             text = normalize_text(row.get("text", ""))
             if 10 < len(text) < 2000:
-                entries.append({
-                    "text": text,
-                    "category": classify_prompt(text),
-                    "source": "lakera/gandalf",
-                })
+                entries.append(
+                    {
+                        "text": text,
+                        "category": classify_prompt(text),
+                        "source": "lakera/gandalf",
+                    }
+                )
         print(f"    Got {len(entries)} prompts")
         return entries
     except Exception as e:
@@ -215,6 +293,7 @@ def fetch_gandalf() -> list[dict]:
 # Phase 2 sources — new large-scale datasets
 # =====================================================================
 
+
 def fetch_hackaprompt(max_entries: int = 5000) -> list[dict]:
     """Fetch HackAPrompt competition submissions (600K+, MIT).
 
@@ -224,6 +303,7 @@ def fetch_hackaprompt(max_entries: int = 5000) -> list[dict]:
     print("  Fetching hackaprompt/hackaprompt-dataset...")
     try:
         from datasets import load_dataset
+
         ds = load_dataset("hackaprompt/hackaprompt-dataset", split="train")
         # Filter successful attacks (correct=True means injection worked)
         successful = []
@@ -236,12 +316,14 @@ def fetch_hackaprompt(max_entries: int = 5000) -> list[dict]:
             text = normalize_text(text)
             if 10 < len(text) < 2000:
                 level = row.get("level", 0)
-                successful.append({
-                    "text": text,
-                    "category": classify_prompt(text),
-                    "source": f"hackaprompt/level-{level}",
-                    "_level": level,
-                })
+                successful.append(
+                    {
+                        "text": text,
+                        "category": classify_prompt(text),
+                        "source": f"hackaprompt/level-{level}",
+                        "_level": level,
+                    }
+                )
 
         print(f"    Got {len(successful)} successful attacks")
 
@@ -288,6 +370,7 @@ def fetch_satml_ctf(max_entries: int = 3000) -> list[dict]:
     print("  Fetching ethz-spylab/ctf-satml24...")
     try:
         from datasets import load_dataset
+
         ds = load_dataset("ethz-spylab/ctf-satml24", "interaction_chats", split="attack")
         entries = []
         for row in ds:
@@ -306,11 +389,13 @@ def fetch_satml_ctf(max_entries: int = 3000) -> list[dict]:
                 text = normalize_text(content)
                 # CTF probing messages are often short/generic — filter aggressively
                 if 50 < len(text) < 2000:
-                    entries.append({
-                        "text": text,
-                        "category": classify_prompt(text),
-                        "source": "satml-ctf-2024",
-                    })
+                    entries.append(
+                        {
+                            "text": text,
+                            "category": classify_prompt(text),
+                            "source": "satml-ctf-2024",
+                        }
+                    )
 
         print(f"    Got {len(entries)} attack messages")
 
@@ -343,7 +428,8 @@ def fetch_llmail_inject(max_entries: int = 3000) -> list[dict]:
     """
     print("  Fetching microsoft/llmail-inject-challenge...")
     try:
-        from datasets import load_dataset, concatenate_datasets
+        from datasets import concatenate_datasets, load_dataset
+
         # Dataset has Phase1 and Phase2 splits
         ds1 = load_dataset("microsoft/llmail-inject-challenge", split="Phase1")
         ds2 = load_dataset("microsoft/llmail-inject-challenge", split="Phase2")
@@ -356,11 +442,13 @@ def fetch_llmail_inject(max_entries: int = 3000) -> list[dict]:
                 continue
             text = normalize_text(body)
             if 30 < len(text) < 2000:
-                entries.append({
-                    "text": text,
-                    "category": classify_prompt(text),
-                    "source": "llmail-inject",
-                })
+                entries.append(
+                    {
+                        "text": text,
+                        "category": classify_prompt(text),
+                        "source": "llmail-inject",
+                    }
+                )
 
         print(f"    Got {len(entries)} attack payloads")
 
@@ -390,16 +478,19 @@ def fetch_jackhhao_jailbreaks() -> list[dict]:
     print("  Fetching jackhhao/jailbreak-classification...")
     try:
         from datasets import load_dataset
+
         ds = load_dataset("jackhhao/jailbreak-classification", split="train")
         entries = []
         for row in ds:
             text = normalize_text(row.get("prompt", ""))
             if 10 < len(text) < 3000:
-                entries.append({
-                    "text": text,
-                    "category": classify_prompt(text),
-                    "source": "jackhhao/jailbreak",
-                })
+                entries.append(
+                    {
+                        "text": text,
+                        "category": classify_prompt(text),
+                        "source": "jackhhao/jailbreak",
+                    }
+                )
         print(f"    Got {len(entries)} jailbreak prompts")
         return entries
     except Exception as e:
@@ -412,6 +503,7 @@ def fetch_safeguard_injections(max_entries: int = 2500) -> list[dict]:
     print("  Fetching xTRam1/safe-guard-prompt-injection...")
     try:
         from datasets import load_dataset
+
         ds = load_dataset("xTRam1/safe-guard-prompt-injection", split="train")
         entries = []
         for row in ds:
@@ -419,11 +511,13 @@ def fetch_safeguard_injections(max_entries: int = 2500) -> list[dict]:
                 continue
             text = normalize_text(row.get("text", ""))
             if 10 < len(text) < 2000:
-                entries.append({
-                    "text": text,
-                    "category": classify_prompt(text),
-                    "source": "safeguard/injection",
-                })
+                entries.append(
+                    {
+                        "text": text,
+                        "category": classify_prompt(text),
+                        "source": "safeguard/injection",
+                    }
+                )
         # Also get test split
         try:
             ds_test = load_dataset("xTRam1/safe-guard-prompt-injection", split="test")
@@ -432,11 +526,13 @@ def fetch_safeguard_injections(max_entries: int = 2500) -> list[dict]:
                     continue
                 text = normalize_text(row.get("text", ""))
                 if 10 < len(text) < 2000:
-                    entries.append({
-                        "text": text,
-                        "category": classify_prompt(text),
-                        "source": "safeguard/injection",
-                    })
+                    entries.append(
+                        {
+                            "text": text,
+                            "category": classify_prompt(text),
+                            "source": "safeguard/injection",
+                        }
+                    )
         except Exception:
             pass
         print(f"    Got {len(entries)} injection prompts")
@@ -453,7 +549,8 @@ def fetch_protectai_validation() -> list[dict]:
     """Fetch ProtectAI prompt injection validation set (3K)."""
     print("  Fetching protectai/prompt-injection-validation...")
     try:
-        from datasets import load_dataset, concatenate_datasets
+        from datasets import load_dataset
+
         # Dataset has multiple splits — fetch injection-relevant ones
         injection_splits = ["InjecGuard_valid", "spikee", "bipia_code", "bipia_text"]
         datasets = []
@@ -474,11 +571,13 @@ def fetch_protectai_validation() -> list[dict]:
                     continue
                 text = normalize_text(text)
                 if 10 < len(text) < 2000:
-                    entries.append({
-                        "text": text,
-                        "category": classify_prompt(text),
-                        "source": "protectai/validation",
-                    })
+                    entries.append(
+                        {
+                            "text": text,
+                            "category": classify_prompt(text),
+                            "source": "protectai/validation",
+                        }
+                    )
         print(f"    Got {len(entries)} injection prompts")
         return entries
     except Exception as e:
@@ -489,6 +588,7 @@ def fetch_protectai_validation() -> list[dict]:
 # =====================================================================
 # Main build pipeline
 # =====================================================================
+
 
 def build_attack_db(output_path: Path | None = None, max_per_source: int = 5000) -> None:
     """Build the complete attack database."""
@@ -593,6 +693,7 @@ def build_attack_db(output_path: Path | None = None, max_per_source: int = 5000)
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(description="Build prompt-armor attack database")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT, help="Output JSONL path")
     parser.add_argument("--max-per-source", type=int, default=5000, help="Max entries per dataset")
