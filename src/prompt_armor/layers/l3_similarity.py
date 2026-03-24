@@ -57,6 +57,28 @@ class L3SimilarityLayer(BaseLayer):
         norms = np.linalg.norm(pooled, axis=1, keepdims=True).clip(min=1e-9)
         return (pooled / norms).astype(np.float32)
 
+    @staticmethod
+    def _download_onnx_model() -> None:
+        """Auto-download L3 ONNX model from HuggingFace Hub."""
+        try:
+            from huggingface_hub import hf_hub_download
+
+            _ONNX_MODEL_PATH.mkdir(parents=True, exist_ok=True)
+            logger.info("L3: downloading ONNX model from prompt-armor/l3-contrastive-onnx...")
+            hf_hub_download(
+                repo_id="prompt-armor/l3-contrastive-onnx",
+                filename="model_quant.onnx",
+                local_dir=str(_ONNX_MODEL_PATH),
+            )
+            hf_hub_download(
+                repo_id="prompt-armor/l3-contrastive-onnx",
+                filename="tokenizer.json",
+                local_dir=str(_ONNX_MODEL_PATH),
+            )
+            logger.info("L3: ONNX model downloaded")
+        except Exception as e:
+            logger.warning("L3: auto-download failed: %s", e)
+
     def _encode_onnx(self, texts: list[str], batch_size: int = 256) -> np.ndarray:
         """Encode texts using ONNX model + tokenizers. Batched for efficiency."""
         all_embeddings = []
@@ -89,6 +111,10 @@ class L3SimilarityLayer(BaseLayer):
         # Try ONNX first (no torch/sentence-transformers needed)
         onnx_model = _ONNX_MODEL_PATH / "model_quant.onnx"
         onnx_tokenizer = _ONNX_MODEL_PATH / "tokenizer.json"
+
+        # Auto-download from HuggingFace if not present
+        if not onnx_model.exists() or not onnx_tokenizer.exists():
+            self._download_onnx_model()
 
         if onnx_model.exists() and onnx_tokenizer.exists():
             import onnxruntime as ort

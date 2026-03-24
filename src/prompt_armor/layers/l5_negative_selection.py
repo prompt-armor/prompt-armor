@@ -9,6 +9,7 @@ Pure statistical features, <1ms inference. Requires scikit-learn.
 
 from __future__ import annotations
 
+import logging
 import math
 import re
 import string
@@ -20,6 +21,8 @@ import numpy as np
 from prompt_armor.config import ShieldConfig
 from prompt_armor.layers.base import BaseLayer
 from prompt_armor.models import Category, Evidence, LayerResult
+
+logger = logging.getLogger("prompt_armor")
 
 _MODEL_PATH = Path(__file__).parent.parent / "data" / "models" / "l5_negative_selection.pkl"
 
@@ -107,9 +110,28 @@ class L5NegativeSelectionLayer(BaseLayer):
         self._score_min: float = 0.0
         self._score_max: float = 1.0
 
+    @staticmethod
+    def _download_model() -> None:
+        """Auto-download L5 model from HuggingFace Hub."""
+        try:
+            from huggingface_hub import hf_hub_download
+
+            logger.info("L5: downloading model from prompt-armor/l5-negative-selection...")
+            hf_hub_download(
+                repo_id="prompt-armor/l5-negative-selection",
+                filename="l5_negative_selection.pkl",
+                local_dir=str(_MODEL_PATH.parent),
+            )
+            logger.info("L5: model downloaded")
+        except Exception as e:
+            logger.warning("L5: auto-download failed: %s", e)
+
     def setup(self) -> None:
         """Load the trained Isolation Forest model."""
         import joblib
+
+        if not _MODEL_PATH.exists():
+            self._download_model()
 
         if not _MODEL_PATH.exists():
             raise FileNotFoundError(f"L5 model not found at {_MODEL_PATH}. Run: python scripts/train_l5_model.py")
