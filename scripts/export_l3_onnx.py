@@ -78,7 +78,7 @@ def export(quantize: bool = True) -> None:
         print(f"   Saved: {quant_path} ({quant_path.stat().st_size / 1024 / 1024:.1f} MB)")
         # Remove full-precision model
         onnx_path.unlink()
-        print(f"   Removed full-precision model")
+        print("   Removed full-precision model")
     else:
         print("\n3. Skipping quantization")
 
