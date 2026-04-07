@@ -2,7 +2,7 @@
 
 All notable changes to prompt-armor will be documented in this file.
 
-## [Unreleased] — dev
+## [0.6.1] - 2026-04-07
 
 ### Added
 - **Auto-download models from HuggingFace Hub** — L3 ONNX (contrastive embeddings, 113MB) and L5 (IsolationForest pickle) auto-download on first use via `huggingface-hub`. Zero manual setup.
