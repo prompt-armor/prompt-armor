@@ -92,6 +92,7 @@ class AnalyticsCollector:
         self._queue: Queue[tuple[str, ShieldResult] | None] = Queue(maxsize=10_000)
         self._thread: threading.Thread | None = None
         self._running = False
+        self._flush_event = threading.Event()
 
         # Ensure directory exists
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -139,13 +140,17 @@ class AnalyticsCollector:
             try:
                 item = self._queue.get(timeout=1.0)
             except Empty:
-                # Commit any pending writes on idle
+                # Commit any pending writes on idle or flush request
                 if batch_count % batch_size != 0 and batch_count > 0:
                     conn.commit()
+                if self._flush_event.is_set():
+                    conn.commit()
+                    self._flush_event.clear()
                 continue
 
             if item is None:
                 conn.commit()  # Flush remaining
+                self._queue.task_done()
                 break
 
             text, result = item
@@ -203,6 +208,8 @@ class AnalyticsCollector:
 
             except Exception as e:
                 logger.warning("Analytics write failed: %s", e)
+            finally:
+                self._queue.task_done()
 
         conn.close()
 
@@ -212,6 +219,18 @@ class AnalyticsCollector:
             self._queue.put_nowait((text, result))
         except Exception:
             pass  # Drop silently if queue is full
+
+    def flush(self) -> None:
+        """Block until the queue is drained and all writes committed."""
+        self._queue.join()
+        # Signal writer to commit any pending batch
+        self._flush_event.set()
+        # Wait for the writer to process the flush (next idle cycle, max 1s)
+        import time
+
+        deadline = time.monotonic() + 3.0
+        while self._flush_event.is_set() and time.monotonic() < deadline:
+            time.sleep(0.05)
 
     def close(self) -> None:
         """Stop the background writer."""

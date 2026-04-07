@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import sqlite3
-import time
 from pathlib import Path
 
 import pytest
@@ -49,7 +48,7 @@ class TestCollectorWrite:
     def test_write_single(self, collector: AnalyticsCollector, tmp_db: Path) -> None:
         result = _make_result()
         collector.record("test prompt", result)
-        time.sleep(1.5)  # wait for background writer
+        collector.flush()
         conn = sqlite3.connect(str(tmp_db))
         count = conn.execute("SELECT COUNT(*) FROM analyses").fetchone()[0]
         conn.close()
@@ -58,7 +57,7 @@ class TestCollectorWrite:
     def test_write_multiple(self, collector: AnalyticsCollector, tmp_db: Path) -> None:
         for i in range(5):
             collector.record(f"prompt {i}", _make_result(risk_score=i * 0.2))
-        time.sleep(2)
+        collector.flush()
         conn = sqlite3.connect(str(tmp_db))
         count = conn.execute("SELECT COUNT(*) FROM analyses").fetchone()[0]
         conn.close()
@@ -66,7 +65,7 @@ class TestCollectorWrite:
 
     def test_stores_prompt_text(self, collector: AnalyticsCollector, tmp_db: Path) -> None:
         collector.record("hello world", _make_result())
-        time.sleep(1.5)
+        collector.flush()
         conn = sqlite3.connect(str(tmp_db))
         row = conn.execute("SELECT prompt_text FROM analyses LIMIT 1").fetchone()
         conn.close()
@@ -76,7 +75,7 @@ class TestCollectorWrite:
         db = tmp_path / "no_prompt.db"
         c = AnalyticsCollector(db_path=db, store_prompts=False)
         c.record("secret text", _make_result())
-        time.sleep(1.5)
+        c.flush()
         conn = sqlite3.connect(str(db))
         row = conn.execute("SELECT prompt_text FROM analyses LIMIT 1").fetchone()
         conn.close()
@@ -85,7 +84,7 @@ class TestCollectorWrite:
 
     def test_decision_stored(self, collector: AnalyticsCollector, tmp_db: Path) -> None:
         collector.record("test", _make_result(decision=Decision.BLOCK))
-        time.sleep(1.5)
+        collector.flush()
         conn = sqlite3.connect(str(tmp_db))
         row = conn.execute("SELECT decision FROM analyses LIMIT 1").fetchone()
         conn.close()
@@ -134,7 +133,7 @@ class TestCollectorCouncilFields:
             lite_decision="warn",
         )
         collector.record("test", result)
-        time.sleep(1.5)
+        collector.flush()
         conn = sqlite3.connect(str(tmp_db))
         row = conn.execute(
             "SELECT council_decision, council_reasoning, council_model, lite_decision FROM analyses LIMIT 1"
