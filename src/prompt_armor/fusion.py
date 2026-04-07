@@ -33,7 +33,7 @@ _META_COEFS = [
     0.0,  # min_score (negligible)
     0.0130,  # l1 × l4 interaction
     0.2266,  # l2 × l3 interaction
-    0.7463,  # n_layers_above_0.1 (strongest signal)
+    0.6936,  # n_layers_above_0.1 (optimized via autoexperiment)
 ]
 _META_INTERCEPT = -1.9898
 _META_THRESHOLD = 0.50  # Optimal F1 threshold on held-out set (F1=0.941)

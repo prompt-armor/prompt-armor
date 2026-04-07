@@ -51,6 +51,7 @@ def collect_benign_texts(max_samples: int = 5000) -> list[str]:
     # 2. xTRam1/safe-guard-prompt-injection (label=0)
     try:
         from datasets import load_dataset
+
         for split in ["train", "test"]:
             ds = load_dataset("xTRam1/safe-guard-prompt-injection", split=split)
             count = 0
@@ -65,6 +66,7 @@ def collect_benign_texts(max_samples: int = 5000) -> list[str]:
     # 3. protectai splits
     try:
         from datasets import load_dataset
+
         for split_name in ["not_inject", "wildguard", "deepset"]:
             try:
                 ds = load_dataset("protectai/prompt-injection-validation", split=split_name)
@@ -84,6 +86,7 @@ def collect_benign_texts(max_samples: int = 5000) -> list[str]:
     # 4. deepset/prompt-injections (label=0)
     try:
         from datasets import load_dataset
+
         ds = load_dataset("deepset/prompt-injections", split="train")
         count = 0
         for row in ds:
@@ -127,11 +130,17 @@ def train(max_samples: int = 5000) -> None:
 
     # Print feature stats
     feature_names = [
-        "word_count", "char_count", "sentence_count",
-        "avg_word_length", "avg_sentence_length",
-        "imperative_verb_ratio", "question_mark_ratio",
-        "special_char_density", "shannon_entropy",
-        "uppercase_ratio", "unique_word_ratio",
+        "word_count",
+        "char_count",
+        "sentence_count",
+        "avg_word_length",
+        "avg_sentence_length",
+        "imperative_verb_ratio",
+        "question_mark_ratio",
+        "special_char_density",
+        "shannon_entropy",
+        "uppercase_ratio",
+        "unique_word_ratio",
     ]
     print("\n   Feature statistics:")
     for i, name in enumerate(feature_names):

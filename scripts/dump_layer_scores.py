@@ -59,16 +59,18 @@ def dump_scores(output_path: Path) -> None:
                 for lr in result.layer_results:
                     layer_scores[lr.layer] = lr.score
 
-                samples.append({
-                    "label": label,
-                    "fused_score": result.risk_score,
-                    "l1_regex": layer_scores.get("l1_regex", 0.0),
-                    "l2_classifier": layer_scores.get("l2_classifier", 0.0),
-                    "l3_similarity": layer_scores.get("l3_similarity", 0.0),
-                    "l4_structural": layer_scores.get("l4_structural", 0.0),
-                    "l5_negative_selection": layer_scores.get("l5_negative_selection", 0.0),
-                    "text_preview": entry["text"][:80],
-                })
+                samples.append(
+                    {
+                        "label": label,
+                        "fused_score": result.risk_score,
+                        "l1_regex": layer_scores.get("l1_regex", 0.0),
+                        "l2_classifier": layer_scores.get("l2_classifier", 0.0),
+                        "l3_similarity": layer_scores.get("l3_similarity", 0.0),
+                        "l4_structural": layer_scores.get("l4_structural", 0.0),
+                        "l5_negative_selection": layer_scores.get("l5_negative_selection", 0.0),
+                        "text_preview": entry["text"][:80],
+                    }
+                )
 
     engine.close()
 
@@ -86,8 +88,8 @@ def dump_scores(output_path: Path) -> None:
         pos_scores = [s[layer] for s in samples if s["label"] == 1]
         neg_scores = [s[layer] for s in samples if s["label"] == 0]
         print(f"\n{layer}:")
-        print(f"  Malicious: mean={sum(pos_scores)/len(pos_scores):.3f} max={max(pos_scores):.3f}")
-        print(f"  Benign:    mean={sum(neg_scores)/len(neg_scores):.3f} max={max(neg_scores):.3f}")
+        print(f"  Malicious: mean={sum(pos_scores) / len(pos_scores):.3f} max={max(pos_scores):.3f}")
+        print(f"  Benign:    mean={sum(neg_scores) / len(neg_scores):.3f} max={max(neg_scores):.3f}")
 
 
 if __name__ == "__main__":
