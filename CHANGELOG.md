@@ -2,6 +2,23 @@
 
 All notable changes to prompt-armor will be documented in this file.
 
+## [Unreleased] — dev
+
+### Added
+- **Auto-download models from HuggingFace Hub** — L3 ONNX (contrastive embeddings, 113MB) and L5 (IsolationForest pickle) auto-download on first use via `huggingface-hub`. Zero manual setup.
+- **Dockerfile** — `python:3.12-slim` with all 5 layers pre-loaded. `docker build -t prompt-armor . && docker run prompt-armor analyze "test"`.
+- **Autoexperiment runner** (`scripts/autoexperiment.py`) — autonomous parameter optimization inspired by karpathy/autoresearch. Random search over fusion coefficients, thresholds, and L1 regex weights. ~300 experiments/hr, JSONL logging, resumable state, graceful shutdown.
+- **Strategic reports** — commercialization vs open-source market analysis and complete project status/roadmap (`docs/reports/`).
+- **`AnalyticsCollector.flush()`** — deterministic queue drain for reliable testing.
+
+### Changed
+- Meta-classifier `n_above_0.1` coefficient optimized 0.7463 → 0.6936 via 500-experiment autoexperiment run
+- F1: 0.9222 → **0.9353** (+1.31%), precision 0.8649 → **0.8933** (+2.84%), 6 fewer FPs
+
+### Fixed
+- Dockerfile installs from source (not PyPI) for full 5-layer auto-download support
+- Collector test flaky on CI — replaced `time.sleep()` with deterministic `flush()` calls
+
 ## [0.6.0] - 2026-03-23
 
 ### Added
