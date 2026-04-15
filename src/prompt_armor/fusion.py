@@ -17,12 +17,11 @@ from collections import Counter
 from prompt_armor.config import ShieldConfig
 from prompt_armor.models import Category, Decision, Evidence, LayerResult, ShieldResult
 
-# --- Trained meta-classifier coefficients (v3 — with L5) ---
-# Learned via LogisticRegressionCV with class_weight='balanced'
-# on 515 benchmark samples (353 benign + 162 malicious).
-# Features: [l1, l2, l3, l4, l5, max, min, l1*l4, l2*l3, n_above_0.1]
-# 25K attack DB + contrastive L3 ONNX + L5 Isolation Forest.
-# L4/L5 clamped to 0 (negative or negligible).
+# --- Trained meta-classifier coefficients (v4 — Phase 1 L3 FP reduction) ---
+# Base: v3 coefficients. Change: L5 excluded from n_above_0.1 count
+# (L5 fires on 100% of inputs, inflating the strongest feature).
+# L3 threshold raised 0.55→0.60, attack DB entries < 30 chars filtered.
+# Negative coefficients clamped to 0 (prevent adversarial score reduction).
 _META_COEFS = [
     0.0601,  # l1_regex
     0.3018,  # l2_classifier
@@ -33,10 +32,10 @@ _META_COEFS = [
     0.0,  # min_score (negligible)
     0.0130,  # l1 × l4 interaction
     0.2266,  # l2 × l3 interaction
-    0.6936,  # n_layers_above_0.1 (optimized via autoexperiment)
+    0.6936,  # n_layers_above_0.1 (L5 excluded from count)
 ]
 _META_INTERCEPT = -1.9898
-_META_THRESHOLD = 0.50  # Optimal F1 threshold on held-out set (F1=0.941)
+_META_THRESHOLD = 0.50  # Optimal F1 threshold
 
 
 def _sigmoid(x: float) -> float:
@@ -111,7 +110,7 @@ def fuse_results(
         min(l1, l2, l3, l4, l5),  # min_score
         l1 * l4,  # l1 × l4 interaction
         l2 * l3,  # l2 × l3 interaction
-        sum(1.0 for x in [l1, l2, l3, l4, l5] if x > 0.1),  # n_above_0.1
+        sum(1.0 for x in [l1, l2, l3, l4] if x > 0.1),  # n_above_0.1 (L5 excluded — fires on 100% of inputs)
     ]
 
     # Dot product + sigmoid

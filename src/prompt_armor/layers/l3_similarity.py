@@ -33,7 +33,7 @@ _DEFAULT_MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
 
 # Similarity thresholds
 _HIGH_SIMILARITY = 0.75
-_MEDIUM_SIMILARITY = 0.55
+_MEDIUM_SIMILARITY = 0.60
 
 
 class L3SimilarityLayer(BaseLayer):
@@ -162,7 +162,10 @@ class L3SimilarityLayer(BaseLayer):
                 cat = entry.get("category", "")
                 if cat == "benign":
                     continue
-                texts.append(entry["text"])
+                text = entry["text"]
+                if len(text) < 30:
+                    continue  # Too short — causes spurious matches with benign prompts
+                texts.append(text)
                 self._attack_metadata.append({"category": cat, "source": entry.get("source", "unknown")})
 
         if not texts:

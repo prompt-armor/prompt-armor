@@ -15,7 +15,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import copy
 import io
 import json
 import logging
@@ -23,9 +22,8 @@ import os
 import random
 import signal
 import sys
-import tempfile
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -376,7 +374,7 @@ class ExperimentRunner:
             else:
                 continue
 
-            duration = time.time() - t0
+            _ = time.time() - t0  # duration tracked per-experiment in _log_result
             if accepted:
                 total_accepted += 1
                 # Re-benchmark to update baseline

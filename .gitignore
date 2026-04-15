@@ -50,6 +50,9 @@ scripts/*.json
 # mkdocs build output
 site/
 
+# Internal docs (strategic reports, analysis, progress tracking — not for public repo)
+internal/
+
 # Environment
 .env
 .env.local
