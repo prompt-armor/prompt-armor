@@ -141,6 +141,10 @@ def train(max_samples: int = 5000) -> None:
         "shannon_entropy",
         "uppercase_ratio",
         "unique_word_ratio",
+        "injection_keyword_density",
+        "first_sent_imperative",
+        "delimiter_count",
+        "script_mixing",
     ]
     print("\n   Feature statistics:")
     for i, name in enumerate(feature_names):
@@ -150,9 +154,9 @@ def train(max_samples: int = 5000) -> None:
     # Train
     print("\n3. Training Isolation Forest...")
     model = IsolationForest(
-        n_estimators=100,
-        max_samples=min(512, len(texts)),
-        contamination=0.01,
+        n_estimators=200,
+        max_samples=min(1024, len(texts)),
+        contamination=0.05,
         random_state=42,
         n_jobs=-1,
     )

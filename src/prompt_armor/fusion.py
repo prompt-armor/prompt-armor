@@ -120,7 +120,7 @@ def fuse_results(
         min(l1, l2, l3, l4, l5),  # min_score
         l1 * l4,  # l1 × l4 interaction
         l2 * l3,  # l2 × l3 interaction
-        sum(1.0 for x in [l1, l2, l3, l4] if x > 0.1),  # n_above_0.1 (L5 excluded)
+        sum(1.0 for x in [l1, l2, l3, l4] if x > 0.1),  # n_above_0.1 (L5 excluded — contributes via hard block + l3_solo)
     ]
 
     # Dot product + sigmoid
