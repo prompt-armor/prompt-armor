@@ -114,3 +114,13 @@ Types: `feat`, `fix`, `refactor`, `style`, `docs`, `test`, `chore`, `perf`, `ci`
 - Squash merge: `feature/*` → `dev`
 - Merge commit: `dev` → `main`
 - One commit = one logical change
+
+## Internal Documents
+
+The `internal/` directory is gitignored and holds private documents not meant for the public repo:
+- Strategic reports (commercialization, market analysis)
+- Progress trackers and roadmaps
+- Internal analysis and notes
+- Collaboration plans
+
+**Rule:** Reports, analyses, and planning documents go in `internal/`, NOT in `docs/`. When in doubt, ask the user before placing a document in `docs/`.
