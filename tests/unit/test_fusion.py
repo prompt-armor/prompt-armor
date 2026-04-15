@@ -59,23 +59,34 @@ class TestFusion:
         assert result.decision in (Decision.WARN, Decision.BLOCK)
         assert result.risk_score > 0.5
 
-    def test_l2_high_others_low_detected(self) -> None:
-        """L2 is the strongest signal — high L2 alone should trigger detection."""
+    def test_l2_high_with_corroboration_detected(self) -> None:
+        """L2 + L3 corroboration triggers detection."""
         results = [
             _make_lr("l1_regex", 0.0),
             _make_lr("l2_classifier", 0.95),
+            _make_lr("l3_similarity", 0.6),
+            _make_lr("l4_structural", 0.0),
+        ]
+        result = fuse_results(results, ShieldConfig())
+        assert result.risk_score > 0.5
+
+    def test_hard_block_requires_corroboration(self) -> None:
+        """Hard block requires 2+ layers with signal (prevents single-layer FPs)."""
+        # Single layer high: falls through to meta-classifier, not hard-blocked
+        results = [
+            _make_lr("l1_regex", 0.96),
+            _make_lr("l2_classifier", 0.0),
             _make_lr("l3_similarity", 0.0),
             _make_lr("l4_structural", 0.0),
         ]
         result = fuse_results(results, ShieldConfig())
-        # Meta-classifier heavily weights L2 (coef +3.20)
-        assert result.risk_score > 0.5
+        assert result.risk_score < 0.95  # Not hard-blocked
 
-    def test_hard_block_threshold(self) -> None:
-        """A single layer at >= 0.95 triggers hard block."""
+    def test_hard_block_with_corroboration(self) -> None:
+        """Hard block fires when 2+ layers have signal."""
         results = [
             _make_lr("l1_regex", 0.96),
-            _make_lr("l2_classifier", 0.0),
+            _make_lr("l2_classifier", 0.5),
             _make_lr("l3_similarity", 0.0),
             _make_lr("l4_structural", 0.0),
         ]
