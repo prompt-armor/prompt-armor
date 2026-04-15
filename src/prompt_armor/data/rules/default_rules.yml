@@ -64,6 +64,36 @@ rules:
     weight: 0.90
     description: "Fake system prompt injection"
 
+  - id: "PI-011"
+    pattern: "forget\\s+(everything|all\\s+(of\\s+)?(that|this))\\s+(before|above|prior)"
+    category: "prompt_injection"
+    weight: 0.85
+    description: "Forget everything before that"
+
+  - id: "PI-012"
+    pattern: "ig[nm]ore\\s+what\\s+I\\s+said\\s+before"
+    category: "prompt_injection"
+    weight: 0.85
+    description: "Ignore what I said before (incl. typos)"
+
+  - id: "PI-013"
+    pattern: "each\\s+(first|initial)\\s+letter\\s+spell"
+    category: "encoding_attack"
+    weight: 0.82
+    description: "Acrostic/steganographic instruction"
+
+  - id: "PI-014"
+    pattern: "(morse|braille|binary|hex)\\s+code\\s+(say|mean|translate|spell|decode)"
+    category: "encoding_attack"
+    weight: 0.80
+    description: "Encoded message decode request"
+
+  - id: "PI-015"
+    pattern: "let('?s|\\s+us)\\s+play\\s+a\\s+game"
+    category: "jailbreak"
+    weight: 0.55
+    description: "Game-based jailbreak opening"
+
   # === JAILBREAK — Bypassing safety constraints ===
   - id: "JB-001"
     pattern: "you\\s+are\\s+(now\\s+)?(?:DAN|STAN|DUDE|AIM|KEVIN|MONGO|OPPO)"
@@ -259,10 +289,10 @@ rules:
 
   # === MULTILINGUAL — German (DE) ===
   - id: "ML-DE-001"
-    pattern: "(vergiss|ignorier[e]?|missacht[e]?)\\s+(alles?|alle[ns]?|sämtliche)\\s*(bisherige[n]?|vorherige[n]?|obige[n]?|davor)?"
+    pattern: "(vergiss|ignorier[e]?|missacht[e]?|höre?\\s+nicht\\s+auf)\\s+(alles?|alle[ns]?|sämtliche)\\s*(bisherige[n]?|vorherige[n]?|obige[n]?|davor|zuvor\\s+gesagte)?"
     category: "prompt_injection"
     weight: 0.88
-    description: "DE: Forget/ignore all (previous)"
+    description: "DE: Forget/ignore/stop listening to all (previous)"
 
   - id: "ML-DE-002"
     pattern: "(neue|nächste)\\s+(Aufgabe|Anweisung|Instruktion)"
