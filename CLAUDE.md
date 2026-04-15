@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-prompt-armor is an open-core LLM prompt security analysis tool. It detects prompt injections, jailbreaks, and other attacks against LLMs. The Lite engine runs 5 analysis layers in parallel, fuses scores via a trained meta-classifier, and returns decisions in ~27ms offline. F1: 93.5% on 515-sample benchmark.
+prompt-armor is an open-core LLM prompt security analysis tool. It detects prompt injections, jailbreaks, and other attacks against LLMs. The Lite engine runs 5 analysis layers in parallel, fuses scores via a trained meta-classifier, and returns decisions in ~27ms offline. F1: 94.0% on 515-sample benchmark (91.0% on jayavibhav 1K real-world eval).
 
 ## Commands
 
@@ -114,3 +114,13 @@ Types: `feat`, `fix`, `refactor`, `style`, `docs`, `test`, `chore`, `perf`, `ci`
 - Squash merge: `feature/*` → `dev`
 - Merge commit: `dev` → `main`
 - One commit = one logical change
+
+## Internal Documents
+
+The `internal/` directory is gitignored and holds private documents not meant for the public repo:
+- Strategic reports (commercialization, market analysis)
+- Progress trackers and roadmaps
+- Internal analysis and notes
+- Collaboration plans
+
+**Rule:** Reports, analyses, and planning documents go in `internal/`, NOT in `docs/`. When in doubt, ask the user before placing a document in `docs/`.

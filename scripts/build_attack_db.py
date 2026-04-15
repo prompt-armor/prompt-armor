@@ -193,7 +193,7 @@ def fetch_deepset_injections() -> list[dict]:
         for row in ds:
             if row["label"] == 1:
                 text = normalize_text(row["text"])
-                if 10 < len(text) < 2000:
+                if 30 < len(text) < 2000:
                     entries.append(
                         {
                             "text": text,
@@ -224,7 +224,7 @@ def fetch_trustai_jailbreaks() -> list[dict]:
             if not row.get("jailbreak", False):
                 continue
             text = normalize_text(row.get("prompt", ""))
-            if 10 < len(text) < 2000:
+            if 30 < len(text) < 2000:
                 entries.append(
                     {
                         "text": text,
@@ -249,7 +249,7 @@ def fetch_chatgpt_jailbreaks() -> list[dict]:
         entries = []
         for row in ds:
             text = normalize_text(row.get("Prompt", ""))
-            if 10 < len(text) < 3000:
+            if 30 < len(text) < 3000:
                 entries.append(
                     {
                         "text": text,
@@ -274,7 +274,7 @@ def fetch_gandalf() -> list[dict]:
         entries = []
         for row in ds:
             text = normalize_text(row.get("text", ""))
-            if 10 < len(text) < 2000:
+            if 30 < len(text) < 2000:
                 entries.append(
                     {
                         "text": text,
@@ -314,7 +314,7 @@ def fetch_hackaprompt(max_entries: int = 5000) -> list[dict]:
             if not text or not isinstance(text, str):
                 continue
             text = normalize_text(text)
-            if 10 < len(text) < 2000:
+            if 30 < len(text) < 2000:
                 level = row.get("level", 0)
                 successful.append(
                     {
@@ -483,7 +483,7 @@ def fetch_jackhhao_jailbreaks() -> list[dict]:
         entries = []
         for row in ds:
             text = normalize_text(row.get("prompt", ""))
-            if 10 < len(text) < 3000:
+            if 30 < len(text) < 3000:
                 entries.append(
                     {
                         "text": text,
@@ -510,7 +510,7 @@ def fetch_safeguard_injections(max_entries: int = 2500) -> list[dict]:
             if row.get("label", 0) != 1:
                 continue
             text = normalize_text(row.get("text", ""))
-            if 10 < len(text) < 2000:
+            if 30 < len(text) < 2000:
                 entries.append(
                     {
                         "text": text,
@@ -525,7 +525,7 @@ def fetch_safeguard_injections(max_entries: int = 2500) -> list[dict]:
                 if row.get("label", 0) != 1:
                     continue
                 text = normalize_text(row.get("text", ""))
-                if 10 < len(text) < 2000:
+                if 30 < len(text) < 2000:
                     entries.append(
                         {
                             "text": text,
@@ -570,7 +570,7 @@ def fetch_protectai_validation() -> list[dict]:
                 if not text or not isinstance(text, str):
                     continue
                 text = normalize_text(text)
-                if 10 < len(text) < 2000:
+                if 30 < len(text) < 2000:
                     entries.append(
                         {
                             "text": text,

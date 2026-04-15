@@ -57,7 +57,7 @@ def train_fusion(scores_path: Path, holdout_ratio: float = 0.3) -> None:
             min(l1, l2, l3, l4, l5),  # Min score
             l1 * l4,  # L1 × L4 interaction (regex + structural)
             l2 * l3,  # L2 × L3 interaction (ML + similarity)
-            sum(1 for x in [l1, l2, l3, l4, l5] if x > 0.1),  # Layers above 0.1
+            sum(1 for x in [l1, l2, l3, l4] if x > 0.1),  # Layers above 0.1 (L5 excluded)
         ]
         raw_features.append(features)
         labels.append(s["label"])

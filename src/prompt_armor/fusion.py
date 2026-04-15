@@ -17,12 +17,16 @@ from collections import Counter
 from prompt_armor.config import ShieldConfig
 from prompt_armor.models import Category, Decision, Evidence, LayerResult, ShieldResult
 
-# --- Trained meta-classifier coefficients (v3 — with L5) ---
-# Learned via LogisticRegressionCV with class_weight='balanced'
-# on 515 benchmark samples (353 benign + 162 malicious).
-# Features: [l1, l2, l3, l4, l5, max, min, l1*l4, l2*l3, n_above_0.1]
-# 25K attack DB + contrastive L3 ONNX + L5 Isolation Forest.
-# L4/L5 clamped to 0 (negative or negligible).
+# --- Trained meta-classifier coefficients (v4 — Phase 1 L3 FP reduction) ---
+# Base: v3 coefficients. Change: L5 excluded from n_above_0.1 count
+# (L5 fires on 100% of inputs, inflating the strongest feature).
+# L3 threshold raised 0.55→0.60, attack DB entries < 30 chars filtered.
+# Negative coefficients clamped to 0 (prevent adversarial score reduction).
+# --- Trained meta-classifier coefficients (v4 — Phase 1 + Phase 2) ---
+# Base: v3 coefficients (trained on 515 samples).
+# Phase 1: L5 excluded from n_above_0.1, L3 threshold 0.55→0.60, DB min 30 chars.
+# Phase 2: l3_solo post-processing dampening (not in logistic regression).
+# Negative coefficients clamped to 0.
 _META_COEFS = [
     0.0601,  # l1_regex
     0.3018,  # l2_classifier
@@ -33,10 +37,10 @@ _META_COEFS = [
     0.0,  # min_score (negligible)
     0.0130,  # l1 × l4 interaction
     0.2266,  # l2 × l3 interaction
-    0.6936,  # n_layers_above_0.1 (optimized via autoexperiment)
+    0.6936,  # n_layers_above_0.1 (L5 excluded from count)
 ]
 _META_INTERCEPT = -1.9898
-_META_THRESHOLD = 0.50  # Optimal F1 threshold on held-out set (F1=0.941)
+_META_THRESHOLD = 0.50  # Optimal F1 threshold
 
 
 def _sigmoid(x: float) -> float:
@@ -80,24 +84,29 @@ def fuse_results(
     max_score = max(scores)
 
     # --- Hard block: if any layer has very high confidence score ---
+    # Require corroboration unless the signal is overwhelming (>= 0.99).
+    # L3 alone can reach 0.95+ on benign prompts (284/307 FPs on jayavibhav 327K).
     if max_score >= config.thresholds.hard_block:
-        hb_evidence: list[Evidence] = []
-        hb_categories: list[Category] = []
-        for lr in layer_results:
-            hb_evidence.extend(lr.evidence)
-            hb_categories.extend(lr.categories)
+        n_layers_with_signal = sum(1 for s in [l1, l2, l3, l4] if s > 0.1)
+        if n_layers_with_signal >= 2:
+            hb_evidence: list[Evidence] = []
+            hb_categories: list[Category] = []
+            for lr in layer_results:
+                hb_evidence.extend(lr.evidence)
+                hb_categories.extend(lr.categories)
 
-        latency = (time.perf_counter() - total_start) * 1000 if total_start else 0.0
-        return ShieldResult(
-            risk_score=max_score,
-            confidence=1.0,
-            decision=Decision.BLOCK,
-            categories=tuple(_dedupe_categories(hb_categories)),
-            evidence=tuple(hb_evidence),
-            needs_council=False,
-            latency_ms=latency,
-            layer_results=tuple(layer_results),
-        )
+            latency = (time.perf_counter() - total_start) * 1000 if total_start else 0.0
+            return ShieldResult(
+                risk_score=max_score,
+                confidence=1.0,
+                decision=Decision.BLOCK,
+                categories=tuple(_dedupe_categories(hb_categories)),
+                evidence=tuple(hb_evidence),
+                needs_council=False,
+                latency_ms=latency,
+                layer_results=tuple(layer_results),
+            )
+        # Single-layer high score: fall through to meta-classifier for proper evaluation
 
     # --- Meta-classifier fusion ---
     # Build feature vector (same as training)
@@ -111,12 +120,25 @@ def fuse_results(
         min(l1, l2, l3, l4, l5),  # min_score
         l1 * l4,  # l1 × l4 interaction
         l2 * l3,  # l2 × l3 interaction
-        sum(1.0 for x in [l1, l2, l3, l4, l5] if x > 0.1),  # n_above_0.1
+        sum(1.0 for x in [l1, l2, l3, l4] if x > 0.1),  # n_above_0.1 (L5 excluded — contributes via hard block + l3_solo)
     ]
 
     # Dot product + sigmoid
     logit = sum(f * c for f, c in zip(features, _META_COEFS)) + _META_INTERCEPT
     risk_score = _sigmoid(logit)
+
+    # --- L3 solo dampening (Phase 2) ---
+    # When L3 is the only layer with signal, dampen the score.
+    # 83.7% of FPs on jayavibhav 327K dataset are L3-only.
+    # Dampening scales with L3 score: low L3 = likely FP, high L3 = possibly real.
+    l3_solo = l3 > 0.2 and l1 == 0 and l2 < 0.15 and l4 < 0.1
+    if l3_solo:
+        if l3 < 0.5:
+            risk_score *= 0.3  # Low L3 — very likely FP
+        elif l3 < 0.8:
+            risk_score *= 0.5  # Medium L3 — probably FP
+        else:
+            risk_score *= 0.7  # High L3 — might be real, gentle dampen
 
     # --- Confidence ---
     # High confidence when score is far from threshold

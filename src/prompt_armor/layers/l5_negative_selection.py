@@ -20,21 +20,31 @@ import numpy as np
 
 from prompt_armor.config import ShieldConfig
 from prompt_armor.layers.base import BaseLayer
+from prompt_armor.layers.l4_structural import _IMPERATIVE_VERBS
 from prompt_armor.models import Category, Evidence, LayerResult
 
 logger = logging.getLogger("prompt_armor")
 
 _MODEL_PATH = Path(__file__).parent.parent / "data" / "models" / "l5_negative_selection.pkl"
 
-# Reuse imperative verbs from L4
-from prompt_armor.layers.l4_structural import _IMPERATIVE_VERBS
+_INJECTION_KEYWORDS = frozenset({
+    "ignore", "forget", "disregard", "override", "bypass", "skip",
+    "instructions", "prompt", "system", "previous", "above", "rules",
+    "pretend", "roleplay", "jailbreak", "dan", "unrestricted",
+    "decode", "base64", "translate", "morse", "hex", "binary",
+})
+
+_DELIMITER_PATTERNS = re.compile(
+    r"(\[system\]|\[inst\]|<\|im_start\|>|<\|im_end\|>|### ?system|### ?instruction|```system)",
+    re.IGNORECASE,
+)
 
 
 def _extract_l5_features(text: str) -> np.ndarray:
-    """Extract 11 statistical features for anomaly detection.
+    """Extract 15 statistical + structural features for anomaly detection.
 
     Shared between training script and inference layer.
-    Features capture the "shape" of normal text without content semantics.
+    Features 1-11 capture text shape, 12-15 capture attack-like patterns.
     """
     words = text.lower().split()
     word_count = max(len(words), 1)
@@ -81,6 +91,27 @@ def _extract_l5_features(text: str) -> np.ndarray:
     unique_words = len(set(words))
     f_unique_ratio = unique_words / word_count
 
+    # 12: Injection keyword density (attack-discriminative)
+    injection_count = sum(1 for w in words if w.strip(string.punctuation) in _INJECTION_KEYWORDS)
+    f_injection_density = injection_count / word_count
+
+    # 13: First sentence imperative ratio (attacks front-load commands)
+    first_sentence_words = sentences[0].lower().split() if sentences else []
+    first_sent_len = max(len(first_sentence_words), 1)
+    first_imp = sum(1 for w in first_sentence_words if w.strip(string.punctuation) in _IMPERATIVE_VERBS)
+    f_first_sent_imperative = first_imp / first_sent_len
+
+    # 14: Delimiter presence (system/instruction markers)
+    f_delimiter_count = float(len(_DELIMITER_PATTERNS.findall(text)))
+
+    # 15: Language mixing (multiple scripts in same text — common evasion)
+    has_latin = bool(re.search(r"[a-zA-Z]", text))
+    has_cyrillic = bool(re.search(r"[\u0400-\u04FF]", text))
+    has_cjk = bool(re.search(r"[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff]", text))
+    has_arabic = bool(re.search(r"[\u0600-\u06FF]", text))
+    f_script_mixing = float(sum([has_latin, has_cyrillic, has_cjk, has_arabic]) - 1)
+    f_script_mixing = max(0.0, f_script_mixing)
+
     return np.array(
         [
             f_word_count,
@@ -94,6 +125,10 @@ def _extract_l5_features(text: str) -> np.ndarray:
             f_entropy,
             f_uppercase_ratio,
             f_unique_ratio,
+            f_injection_density,
+            f_first_sent_imperative,
+            f_delimiter_count,
+            f_script_mixing,
         ],
         dtype=np.float32,
     )
@@ -152,13 +187,14 @@ class L5NegativeSelectionLayer(BaseLayer):
         features = _extract_l5_features(text)
         raw = float(self._model.decision_function(features.reshape(1, -1))[0])
 
-        # Normalize: sklearn returns more negative = more anomalous
-        # Map to [0, 1] where 1.0 = most anomalous, 0.0 = most normal
-        denom = self._score_max - self._score_min
-        if abs(denom) < 1e-10:
+        # sklearn decision_function: positive = inlier, negative = outlier.
+        # Only flag outliers (negative scores). Inliers get score 0.
+        if raw >= 0:
             score = 0.0
         else:
-            score = (self._score_max - raw) / denom
+            # Normalize: map negative range to [0, 1] using training min
+            # More negative = more anomalous = higher score
+            score = min(1.0, abs(raw) / max(abs(self._score_min), 1e-10))
         score = max(0.0, min(1.0, score))
 
         evidence: list[Evidence] = []

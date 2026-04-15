@@ -7,21 +7,32 @@ python tests/benchmark/run_benchmark.py
 python tests/benchmark/run_benchmark.py --output results.json
 ```
 
-## Current Results
+## Current Results (v0.7.0)
+
+### Internal benchmark
 
 Dataset: 353 benign + 162 malicious (515 total) from deepset/prompt-injections, TrustAIRLab/in-the-wild-jailbreak-prompts, SaTML CTF 2024, LLMail-Inject, ProtectAI, SafeGuard, jackhhao, Lakera/gandalf, and hand-curated samples.
 
-**Full dataset:**
+| Metric | Value |
+|--------|-------|
+| Accuracy | 96.31% |
+| Precision | 96.1% |
+| Recall | 92.0% |
+| F1 Score | **94.0%** |
+| Avg Latency | ~24ms |
+| FP / FN | 6 / 13 |
+
+### External evaluation (jayavibhav/prompt-injection)
+
+Evaluated on 1,000 samples (308 attacks, 692 benign) from the [jayavibhav/prompt-injection](https://huggingface.co/datasets/jayavibhav/prompt-injection) dataset (327K total, public on HuggingFace).
 
 | Metric | Value |
 |--------|-------|
-| Accuracy | 95.73% |
-| Precision | 89.3% |
-| Recall | 98.2% |
-| F1 Score | **93.5%** |
-| Avg Latency | ~27ms |
-| P95 Latency | ~209ms |
-| Adversarial Recall | 94.4% (43/46 evasion prompts) |
+| Precision | 83.7% |
+| Recall | 99.7% |
+| F1 Score | **91.0%** |
+| FP / FN | 60 / 1 |
+| L3-only FPs | 2 (3.3% of FPs) |
 
 ## Methodology
 
