@@ -2,6 +2,29 @@
 
 All notable changes to prompt-armor will be documented in this file.
 
+## [0.7.0] - 2026-04-15
+
+### Added
+- **Large-scale evaluation script** (`scripts/eval_large_dataset.py`) — evaluate against jayavibhav/prompt-injection (327K samples) or any JSONL dataset. Threshold grid search, L3-only FP tracking, throughput metrics.
+- **5 new L1 regex rules** — PI-011 (forget everything before), PI-012 (ignore with typos), PI-013 (acrostic detection), PI-014 (Morse/hex decode), PI-015 (game-based jailbreak). German ML-DE-001 expanded with "höre nicht auf".
+- **4 new L5 features** (11→15) — injection keyword density, first sentence imperative ratio, delimiter count, script mixing.
+- **`internal/` directory** (gitignored) — for strategic reports and analysis not meant for public repo.
+
+### Changed
+- **Corroborated hard block** — `max_score >= 0.95` now requires 2+ layers with signal. Previously L3 alone caused 284/307 FPs on large datasets by bypassing meta-classifier.
+- **L3 solo dampening** — when L3 is the only layer with signal, risk_score dampened by 0.3-0.7x (graduated by L3 magnitude). Eliminates 99.2% of L3-only FPs.
+- **L3 similarity floor** raised 0.55 → 0.60 — reduces borderline matches against 25K attack DB.
+- **L5 score normalization** — fixed to use sklearn convention (inlier=0, outlier>0). L5 no longer fires on 100% of inputs.
+- **L5 model retrained** — 200 estimators (was 100), contamination 0.05 (was 0.01), 1024 max_samples.
+- **Attack DB min length** raised to 30 chars — filters generic entries causing spurious L3 matches.
+- **L5 excluded from `n_above_0.1`** — prevents uninformative L5 from inflating the strongest fusion feature.
+- F1 (internal): 93.53% → **94.01%**, Precision: 89.33% → **96.13%**, FPs: 19 → **6**
+- F1 (jayavibhav 1K): ~66.7% → **90.96%**, Precision: ~50% → **83.65%**, FPs: 307 → **60**
+
+### Fixed
+- Internal reports moved from `docs/reports/` to gitignored `internal/`
+- Autoexperiment lint issues (unused imports, variable)
+
 ## [0.6.1] - 2026-04-07
 
 ### Added
