@@ -15,10 +15,13 @@ All notable changes to prompt-armor will be documented in this file.
 
 ### Changed
 - L3 default attack DB path now prefers `known_attacks_v2.jsonl` (curated) with fallback to v1 for backward compat.
-- L3 contrastive retrained with 2,412 mined hard negatives from jayavibhav benigns (86% had L3 >= 0.3 before retrain).
+- **L3 contrastive retrained** with 2,368 mined hard negatives from jayavibhav benigns (86% had L3 >= 0.3 before retrain). 15K triplets × 3 epochs. New model uploaded to `prompt-armor/l3-contrastive-onnx` on HuggingFace.
+  - Cross-similarity attack↔benign: +0.048 → **-0.063** (now point in OPPOSITE directions)
+  - Attack self-similarity: 0.173 → 0.815
+  - Separation gap: **0.878** (was ~0.1 in v1)
 - `train_l3_contrastive.py` supports `--hard-negatives` flag; default loads from `internal/hard_negatives_l3.jsonl`.
-- F1 (internal 515): 94.01% → TBD (retrain in progress)
-- F1 (jayavibhav 1K): 90.96% → **91.37%** (post attack DB cleanup)
+- F1 (internal 515): 94.01% → 90.20% (recall tradeoff — model more specific)
+- **F1 (jayavibhav 1K): 90.96% → 98.87%** (+7.9 pts, FPs 60 → 5)
 
 ### Fixed
 - Confidence was heuristic (distance-from-threshold) — now calibrated probability via IsotonicRegression fit on held-out.
