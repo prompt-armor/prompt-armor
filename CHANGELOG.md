@@ -2,7 +2,7 @@
 
 All notable changes to prompt-armor will be documented in this file.
 
-## [Unreleased] — v0.8.0 WIP
+## [0.8.0] - 2026-04-17
 
 ### Added
 - **Isotonic calibration** for `confidence` field (`fusion.py` + `train_fusion.py`). ECE 0.0342 → 0.0000 on held-out. Zero runtime deps (piecewise-linear lookup).
