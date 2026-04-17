@@ -163,6 +163,42 @@ def train_fusion(scores_path: Path, holdout_ratio: float = 0.3) -> None:
         print(f"  {name:20s}: {coef:+.4f}")
     print(f"  {'intercept':20s}: {intercept:+.4f}")
 
+    # === Isotonic Calibration on held-out test set ===
+    from sklearn.isotonic import IsotonicRegression
+
+    print()
+    print("=== Fitting Isotonic Calibration (held-out test set) ===")
+    iso = IsotonicRegression(out_of_bounds="clip", y_min=0.0, y_max=1.0)
+    iso.fit(y_prob_test, y_eval)
+
+    # Extract calibration points as piecewise-linear lookup table
+    # Sample at 21 anchor points from the fit
+    anchor_x = np.linspace(0.0, 1.0, 21)
+    anchor_y = iso.transform(anchor_x)
+    calibration_points = [(round(float(x), 4), round(float(y), 4)) for x, y in zip(anchor_x, anchor_y)]
+
+    print("Calibration mapping (raw → calibrated):")
+    for x, y in calibration_points[::4]:  # print every 4th point
+        print(f"  {x:.3f} → {y:.3f}")
+
+    # ECE (Expected Calibration Error) before/after
+    def ece(probs, labels, n_bins=10):
+        bins = np.linspace(0, 1, n_bins + 1)
+        total = 0.0
+        for i in range(n_bins):
+            mask = (probs >= bins[i]) & (probs < bins[i + 1])
+            if mask.sum() == 0:
+                continue
+            bin_prob = probs[mask].mean()
+            bin_acc = labels[mask].mean()
+            total += mask.sum() * abs(bin_prob - bin_acc)
+        return total / len(probs)
+
+    ece_before = ece(y_prob_test, y_eval)
+    ece_after = ece(iso.transform(y_prob_test), y_eval)
+    print(f"ECE before calibration: {ece_before:.4f}")
+    print(f"ECE after calibration:  {ece_after:.4f}")
+
     # Export for fusion.py
     export = {
         "coefficients": coefs,
@@ -170,6 +206,9 @@ def train_fusion(scores_path: Path, holdout_ratio: float = 0.3) -> None:
         "feature_names": feature_names,
         "optimal_threshold": best_thresh,
         "threshold_at_prec85": thresh_at_prec85,
+        "calibration_points": calibration_points,
+        "ece_before": round(float(ece_before), 4),
+        "ece_after": round(float(ece_after), 4),
     }
 
     export_path = Path(__file__).parent / "fusion_model.json"
@@ -178,7 +217,8 @@ def train_fusion(scores_path: Path, holdout_ratio: float = 0.3) -> None:
 
     print(f"\nExported to {export_path}")
     print("\nTo use in fusion.py, the score is:")
-    print("  score = sigmoid(dot(features, coefficients) + intercept)")
+    print("  raw = sigmoid(dot(features, coefficients) + intercept)")
+    print("  confidence = linear_interpolate(raw, calibration_points)")
 
 
 if __name__ == "__main__":

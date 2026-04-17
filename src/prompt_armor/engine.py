@@ -72,30 +72,55 @@ def _build_layers(config: ShieldConfig) -> list[BaseLayer]:
     return layers
 
 
-# Zero-width and invisible characters to strip
-_ZERO_WIDTH_CHARS = re.compile(
+# Zero-width and invisible characters to strip.
+# Includes: basic zero-widths, Bidi format controls (RTL override attacks),
+# Unicode Tag chars (ASCII Smuggler attack — U+E0000-E007F range),
+# and interlinear annotation marks.
+_INVISIBLE_CHARS = re.compile(
     "["
-    "\u200b"  # zero-width space
-    "\u200c"  # zero-width non-joiner
-    "\u200d"  # zero-width joiner
-    "\u200e"  # left-to-right mark
-    "\u200f"  # right-to-left mark
+    "\u200b-\u200f"  # zero-widths + LRM/RLM
+    "\u202a-\u202e"  # Bidi formatting (RTL override, etc.)
+    "\u2060-\u206f"  # word joiner, invisible operators, interlinear
     "\u00ad"  # soft hyphen
     "\ufeff"  # BOM / zero-width no-break space
-    "\u2060"  # word joiner
-    "\u2061"  # function application
-    "\u2062"  # invisible times
-    "\u2063"  # invisible separator
-    "\u2064"  # invisible plus
     "\u180e"  # Mongolian vowel separator
+    "\U000e0000-\U000e007f"  # Unicode Tag chars — ASCII smuggler attack
     "]"
 )
 
+# Homoglyph fold: map common Cyrillic/Greek/fullwidth lookalikes to ASCII Latin.
+# Keeps detection focused on intent, not on which script was used to write it.
+# Applied AFTER NFKC so fullwidth variants are normalized first.
+_HOMOGLYPH_MAP = str.maketrans({
+    # Cyrillic → Latin (lowercase)
+    "а": "a", "в": "b", "е": "e", "ё": "e", "з": "z", "и": "i", "і": "i",
+    "й": "i", "к": "k", "м": "m", "н": "h", "о": "o", "р": "p", "с": "c",
+    "т": "t", "у": "y", "х": "x", "ѕ": "s", "ј": "j", "ԛ": "q", "ԝ": "w",
+    # Cyrillic → Latin (uppercase)
+    "А": "A", "В": "B", "Е": "E", "Ё": "E", "З": "Z", "И": "I", "І": "I",
+    "К": "K", "М": "M", "Н": "H", "О": "O", "Р": "P", "С": "C", "Т": "T",
+    "У": "Y", "Х": "X", "Ѕ": "S", "Ј": "J", "Ԛ": "Q", "Ԝ": "W",
+    # Greek → Latin
+    "α": "a", "ο": "o", "ρ": "p", "ν": "v", "ε": "e", "τ": "t", "κ": "k",
+    "ι": "i", "μ": "m", "η": "n",
+    "Α": "A", "Β": "B", "Ε": "E", "Ζ": "Z", "Η": "H", "Ι": "I",
+    "Κ": "K", "Μ": "M", "Ν": "N", "Ο": "O", "Ρ": "P", "Τ": "T",
+    "Υ": "Y", "Χ": "X",
+})
+
 
 def _normalize_text(text: str) -> str:
-    """Normalize text to defeat common evasion techniques."""
+    """Normalize text to defeat common evasion techniques.
+
+    Pipeline:
+    1. NFKC — normalize fullwidth/compatibility forms
+    2. Strip invisible chars (zero-widths, Bidi controls, Unicode Tags)
+    3. Fold homoglyphs (Cyrillic/Greek → Latin)
+    4. Collapse whitespace (preserve newlines)
+    """
     text = unicodedata.normalize("NFKC", text)
-    text = _ZERO_WIDTH_CHARS.sub("", text)
+    text = _INVISIBLE_CHARS.sub("", text)
+    text = text.translate(_HOMOGLYPH_MAP)
     text = re.sub(r"[^\S\n]+", " ", text)
     return text
 
