@@ -2,6 +2,25 @@
 
 All notable changes to prompt-armor will be documented in this file.
 
+## [0.8.1] - 2026-04-17
+
+Robustness patch — expanded benchmarks and defensive L5 corroboration. No model changes; v0.8.0 API and HuggingFace artifacts unchanged.
+
+### Added
+- **Internal benchmark expanded 515 → 1,534 samples** (965 benign + 569 malicious). New sources: jayavibhav train split (leakage-guarded), JailbreakBench, lmsys/toxic-chat (production hard negatives). 3× larger for statistical confidence.
+- **Adversarial suite expanded 46 → 103 evasion prompts** (+124%). New categories with 100% detection on v0.8.0: multilingual (ZH/JA/KO/RU/AR/HI/TR/PL/IT/mixed-script, 15 new), indirect/agentic injection (RAG, tool output, email, PDF, markdown, 10 new), polymorphic jailbreak personas (AIM/DUDE/MAXIMUS/Evil-Confidant/Developer/Opposite/Grandma/Multi-level, 8 new). Also: social engineering (6), Crescendo/FITD (3), benign hard negatives (16).
+
+### Changed
+- **L5 enabled as corroborator** in hard-block and `l3_solo` checks when L5 > 0.3. Post-recalibration L5 discriminates 5.5× (20.5% malicious vs 3.7% benign at threshold 0.1). A/B neutral on current benchmarks (defensive coverage for future distributions).
+
+### Metrics (v0.8.1)
+
+**External eval** (jayavibhav 1K — real-world): identical to v0.8.0 — F1 **98.87%**, Precision 98.4%, Recall 99.4%, 5 FPs.
+
+**Internal benchmark v2** (1,534 samples): F1 86.9%, Precision 94.6%, Recall 80.4%, 26 FPs. More rigorous than 515-sample v1 benchmark (not a regression — 3× larger dataset with edge cases).
+
+**Adversarial recall**: 94.4% (43/46) → **96.1%** (74/77). Multilingual 15/15, agentic 10/10, polymorphic personas 8/8.
+
 ## [0.8.0] - 2026-04-17
 
 ### Added
