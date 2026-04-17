@@ -1,0 +1,20 @@
+{
+  "version": "v2",
+  "created_at": "2026-04-17T04:24:50Z",
+  "original_count": 25160,
+  "pruned_short": 2783,
+  "filtered_generic": 14180,
+  "final_count": 1509,
+  "reduction_pct": 94.0,
+  "sha256_16": "84c0c893e3a2318c",
+  "sources": {
+    "satml-ctf-2024": 595,
+    "llmail-inject": 259,
+    "trustai/in-the-wild": 51,
+    "safeguard/injection": 236,
+    "protectai/validation": 34,
+    "lakera/gandalf": 172,
+    "deepset/prompt-injections": 45,
+    "jackhhao/jailbreak": 117
+  }
+}

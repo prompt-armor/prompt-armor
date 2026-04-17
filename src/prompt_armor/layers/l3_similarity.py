@@ -26,7 +26,13 @@ logger = logging.getLogger("prompt_armor")
 
 _CATEGORY_MAP: dict[str, Category | None] = {**CATEGORY_MAP, "benign": None}
 
-_DEFAULT_ATTACKS_PATH = Path(__file__).parent.parent / "data" / "attacks" / "known_attacks.jsonl"
+# Default path resolution: prefer v2 (curated) if present, fall back to v1.
+# known_attacks_v2.jsonl is the semantically-deduplicated + quality-filtered
+# attack DB from scripts/dedup_attacks_semantic.py. See data/attacks/manifest.json
+# for reduction stats. Typically ~1500 high-specificity entries vs 25K in v1.
+_V1_ATTACKS_PATH = Path(__file__).parent.parent / "data" / "attacks" / "known_attacks.jsonl"
+_V2_ATTACKS_PATH = Path(__file__).parent.parent / "data" / "attacks" / "known_attacks_v2.jsonl"
+_DEFAULT_ATTACKS_PATH = _V2_ATTACKS_PATH if _V2_ATTACKS_PATH.exists() else _V1_ATTACKS_PATH
 _ONNX_MODEL_PATH = Path(__file__).parent.parent / "data" / "models" / "l3-contrastive-onnx"
 _CONTRASTIVE_MODEL_PATH = Path(__file__).parent.parent / "data" / "models" / "l3-contrastive"
 _DEFAULT_MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
