@@ -43,14 +43,17 @@ DeBERTa-v3-xsmall (22M params) fine-tuned for prompt injection classification. R
 
 **Latency:** 10-20ms | **Dependencies:** sentence-transformers, faiss-cpu
 
-Compares prompt embeddings against a database of **25,160 known attack embeddings** using cosine similarity via FAISS IVFFlat.
+Compares prompt embeddings against a curated database of **1,509 high-specificity attack embeddings** (v0.8.0 — v2 DB, semantically deduplicated from 25,160 raw entries) using cosine similarity via FAISS.
 
-- Model: `paraphrase-multilingual-MiniLM-L12-v2`, **contrastive fine-tuned** with TripletLoss
+- Model: `paraphrase-multilingual-MiniLM-L12-v2`, **contrastive fine-tuned v2** with TripletLoss + 2,368 mined hard negatives (jayavibhav benigns that scored high with v1 model)
 - Fine-tuning separates embeddings by **intent**, not topic — "how does DAN jailbreak work?" (benign) no longer matches "do anything now" (attack)
-- Cross-similarity (attack↔benign) reduced from 0.053 to -0.021 after fine-tuning
-- FAISS IVFFlat index (256 clusters, 16 nprobe) for O(sqrt(n)) search at 25K+ vectors
-- Attack database: `data/attacks/known_attacks.jsonl` (10 sources: SaTML CTF, LLMail-Inject, ProtectAI, SafeGuard, jackhhao, deepset, TrustAIRLab, Lakera, hand-curated)
-- Falls back to base model if contrastive model not available
+- Cross-similarity (attack↔benign): v0 base 0.048 → v1 fine-tune -0.021 → **v2 fine-tune -0.063** (opposite directions)
+- Attack self-similarity: 0.17 → **0.82** (attacks cluster consistently)
+- Separation gap: **0.88**
+- FAISS index for O(sqrt(n)) search
+- Attack database v2: `data/attacks/known_attacks_v2.jsonl` (curated via `scripts/dedup_attacks_semantic.py`)
+- Sources: SaTML CTF, LLMail-Inject, ProtectAI, SafeGuard, jackhhao, deepset, TrustAIRLab, Lakera, hand-curated
+- Falls back to v1 attack DB if v2 not present; falls back to base model if contrastive not available
 
 ## L4 — Structural Analysis
 

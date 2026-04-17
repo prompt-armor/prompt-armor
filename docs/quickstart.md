@@ -6,7 +6,7 @@
 # Core only (L1 regex + L4 structural, <1ms, ~2MB install)
 pip install prompt-armor
 
-# With ML layers (adds L2 DeBERTa + L3 ONNX similarity + L5 anomaly, ~27ms)
+# With ML layers (adds L2 DeBERTa + L3 ONNX similarity + L5 anomaly, ~21ms)
 pip install "prompt-armor[ml]"
 
 # With MCP server support
