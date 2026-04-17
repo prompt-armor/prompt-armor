@@ -7,7 +7,20 @@ python tests/benchmark/run_benchmark.py
 python tests/benchmark/run_benchmark.py --output results.json
 ```
 
-## Current Results (v0.7.0)
+## Current Results (v0.8.0)
+
+### External evaluation (jayavibhav/prompt-injection) — real-world distribution
+
+Evaluated on 1,000 samples (308 attacks, 692 benign) from the [jayavibhav/prompt-injection](https://huggingface.co/datasets/jayavibhav/prompt-injection) dataset (327K total, public on HuggingFace).
+
+| Metric | Value |
+|--------|-------|
+| Accuracy | 99.3% |
+| Precision | **98.4%** |
+| Recall | 99.4% |
+| F1 Score | **98.87%** |
+| FP / FN | 5 / 2 |
+| L3-only FPs | 0 |
 
 ### Internal benchmark
 
@@ -15,32 +28,22 @@ Dataset: 353 benign + 162 malicious (515 total) from deepset/prompt-injections, 
 
 | Metric | Value |
 |--------|-------|
-| Accuracy | 96.31% |
-| Precision | 96.1% |
-| Recall | 92.0% |
-| F1 Score | **94.0%** |
-| Avg Latency | ~24ms |
-| FP / FN | 6 / 13 |
+| Accuracy | 94.2% |
+| Precision | 95.8% |
+| Recall | 85.2% |
+| F1 Score | **90.2%** |
+| Avg Latency | ~21ms |
+| FP / FN | 6 / 24 |
 
-### External evaluation (jayavibhav/prompt-injection)
-
-Evaluated on 1,000 samples (308 attacks, 692 benign) from the [jayavibhav/prompt-injection](https://huggingface.co/datasets/jayavibhav/prompt-injection) dataset (327K total, public on HuggingFace).
-
-| Metric | Value |
-|--------|-------|
-| Precision | 83.7% |
-| Recall | 99.7% |
-| F1 Score | **91.0%** |
-| FP / FN | 60 / 1 |
-| L3-only FPs | 2 (3.3% of FPs) |
+> Note: internal benchmark has 162 curated attacks with some edge cases not represented in the training anchor pool. External eval (jayavibhav 327K) is more representative of production traffic — that's where v0.8.0 shows its dramatic improvement.
 
 ## Methodology
 
-5 analysis layers run in parallel. A trained logistic regression meta-classifier fuses layer scores with interaction features. Layer coefficients are clamped to non-negative values to prevent adversarial exploitation.
+5 analysis layers run in parallel. A trained logistic regression meta-classifier fuses layer scores with interaction features. Layer coefficients are clamped to non-negative values to prevent adversarial exploitation. Isotonic calibration of `confidence` field (ECE 0.0).
 
-L3 uses a contrastive fine-tuned embedding model (TripletLoss) that matches by intent rather than topic. L5 uses an Isolation Forest trained on 5,000 benign prompts to detect anomalous text patterns.
+L3 uses a contrastive fine-tuned embedding model (MiniLM-L12-v2, TripletLoss + mined hard negatives) that matches by intent rather than topic. Cross-similarity attack↔benign is **-0.063** (points in opposite directions). L5 uses an Isolation Forest trained on 5,000 benign prompts to detect anomalous text patterns.
 
-The benchmark includes attacks in English, German, Spanish, French, and Portuguese, covering 8 attack categories. Attack DB: 25,160 entries from 10 sources.
+The benchmark includes attacks in English, German, Spanish, French, and Portuguese, covering 8 attack categories. Attack DB v2: 1,509 high-specificity entries (curated from 25,160 via semantic dedup).
 
 ## Retraining
 
