@@ -28,6 +28,46 @@ _FICTION_PATTERNS = [
     re.compile(r"\b(imagine|hypothetical|scenario|thought\s+experiment)\b", re.IGNORECASE),
 ]
 
+# Fuzzy keyword detection for typo/leetspeak evasion.
+# Observed evasions from jayavibhav analysis:
+# - "igmre" (ignore with m↔n swap, e reorder)
+# - "ignroe" (ignore with letter transposition)
+# - "ignre" (missing letter)
+# - "1gn0re" (leetspeak)
+# - "d1sreg4rd" (leetspeak disregard)
+# Conservative weight (0.70) to avoid FPs on typos in legitimate text.
+_FUZZY_KEYWORDS = [
+    (
+        re.compile(
+            # "ignore" variants: transpositions, letter drops, leetspeak
+            r"\b(?:"
+            r"i[gq]m(?:re|r[oe]|ore|er)|"     # igmre, igmor, igmrer
+            r"ignroe|ignr[oe]|ignre|"          # ignroe, ignro, ignre
+            r"i[gq]n[o0]r[e3]|"                # ignore, 1gn0r3
+            r"1gn[o0]re|"                      # 1gn0re
+            # "disregard" variants (accept 4 for 'a' leetspeak)
+            r"d[i1]sr[e3]g[a@4]rd|"            # d1sreg4rd
+            r"dsregard|disregrd|"              # letter drops
+            # "forget" variants
+            r"f[o0]rg[e3]t|fo?rgt"             # f0rg3t, frgt
+            r")\s+(all|the|these|my|your|previous|prior|above|what|everything|what\s+i)\b",
+            re.IGNORECASE,
+        ),
+        "prompt_injection",
+        0.70,
+        "Fuzzy-matched injection verb (typo/leetspeak)",
+    ),
+    (
+        re.compile(
+            r"\b(?:dan|d[a@]n|stan|st[a@]n|dude|aim|kevin|mongo|oppo)\s+(mode|act|pretend)\b",
+            re.IGNORECASE,
+        ),
+        "jailbreak",
+        0.78,
+        "Fuzzy-matched jailbreak persona",
+    ),
+]
+
 
 @dataclass
 class RegexRule:
@@ -63,6 +103,23 @@ class L1RegexLayer(BaseLayer):
             match = rule.pattern.search(text)
             if match:
                 matches.append((rule, match))
+
+        # Fuzzy keyword matching for typo/leetspeak evasion.
+        # Synthesizes RegexRule instances on the fly — lower weight than curated rules.
+        for pattern, category_name, weight, description in _FUZZY_KEYWORDS:
+            match = pattern.search(text)
+            if match:
+                cat = _CATEGORY_MAP.get(category_name)
+                if cat is None:
+                    continue
+                synthetic_rule = RegexRule(
+                    id=f"FUZZY-{category_name[:2].upper()}",
+                    pattern=pattern,
+                    category=cat,
+                    weight=weight,
+                    description=description,
+                )
+                matches.append((synthetic_rule, match))
 
         if not matches:
             latency = (time.perf_counter() - start) * 1000
