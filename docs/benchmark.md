@@ -22,20 +22,20 @@ Evaluated on 1,000 samples (308 attacks, 692 benign) from the [jayavibhav/prompt
 | FP / FN | 5 / 2 |
 | L3-only FPs | 0 |
 
-### Internal benchmark
+### Internal benchmark v2 (expanded to 1,534 samples)
 
-Dataset: 353 benign + 162 malicious (515 total) from deepset/prompt-injections, TrustAIRLab/in-the-wild-jailbreak-prompts, SaTML CTF 2024, LLMail-Inject, ProtectAI, SafeGuard, jackhhao, Lakera/gandalf, and hand-curated samples.
+Dataset: 969 benign + 565 malicious (1,534 total) from deepset/prompt-injections (train+test), wildjailbreak, jackhhao/jailbreak-classification, JailbreakBench, jayavibhav/prompt-injection (train split only — test is reserved for external eval), lmsys/toxic-chat (benign hard negatives), and hand-curated samples.
 
 | Metric | Value |
 |--------|-------|
-| Accuracy | 94.2% |
-| Precision | 95.8% |
-| Recall | 85.2% |
-| F1 Score | **90.2%** |
-| Avg Latency | ~21ms |
-| FP / FN | 6 / 24 |
+| Accuracy | 91.1% |
+| Precision | 94.6% |
+| Recall | 80.4% |
+| F1 Score | **86.9%** |
+| Avg Latency | ~20ms |
+| FP / FN | 26 / 111 |
 
-> Note: internal benchmark has 162 curated attacks with some edge cases not represented in the training anchor pool. External eval (jayavibhav 327K) is more representative of production traffic — that's where v0.8.0 shows its dramatic improvement.
+> Note: v2 benchmark is 3× larger and includes adversarial + production-like distributions. The external eval (jayavibhav 1K, F1 98.87%) remains the primary real-world indicator. The 111 FN are edge-case attacks being analyzed for v0.9.
 
 ## Methodology
 

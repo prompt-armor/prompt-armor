@@ -18,7 +18,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-ATTACK_DB = Path(__file__).parent.parent / "src" / "prompt_armor" / "data" / "attacks" / "known_attacks.jsonl"
+_V1_ATTACK_DB = Path(__file__).parent.parent / "src" / "prompt_armor" / "data" / "attacks" / "known_attacks.jsonl"
+_V2_ATTACK_DB = Path(__file__).parent.parent / "src" / "prompt_armor" / "data" / "attacks" / "known_attacks_v2.jsonl"
+HARD_NEG_FILE = Path(__file__).parent.parent / "internal" / "hard_negatives_l3.jsonl"
 BENCH_DIR = Path(__file__).parent.parent / "tests" / "benchmark" / "dataset"
 
 random.seed(42)
@@ -29,9 +31,22 @@ def dedup_key(text: str) -> str:
 
 
 def load_attack_db_hashes() -> set[str]:
+    """Load hashes from BOTH v1 and v2 attack DBs for safety."""
     hashes = set()
-    if ATTACK_DB.exists():
-        with open(ATTACK_DB) as f:
+    for db in [_V1_ATTACK_DB, _V2_ATTACK_DB]:
+        if db.exists():
+            with open(db) as f:
+                for line in f:
+                    if line.strip():
+                        hashes.add(dedup_key(json.loads(line)["text"]))
+    return hashes
+
+
+def load_hard_negatives_hashes() -> set[str]:
+    """Mined hard negatives (used in L3 retraining) — exclude from benchmark to avoid leakage."""
+    hashes = set()
+    if HARD_NEG_FILE.exists():
+        with open(HARD_NEG_FILE) as f:
             for line in f:
                 if line.strip():
                     hashes.add(dedup_key(json.loads(line)["text"]))
@@ -413,13 +428,116 @@ def fetch_deepset_test_malicious() -> list[dict]:
         return []
 
 
+def fetch_jayavibhav_train_malicious(max_samples: int = 400) -> list[dict]:
+    """Fetch malicious from jayavibhav TRAIN split (benchmark uses test split for eval).
+
+    IMPORTANT: jayavibhav test is used for external eval. Only pull from train
+    to avoid leakage. Also dedup against hard_negatives_l3.jsonl (which used
+    test split) to be safe.
+    """
+    print("  Fetching jayavibhav/prompt-injection (train, malicious)...")
+    try:
+        from datasets import load_dataset
+
+        ds = load_dataset("jayavibhav/prompt-injection", split="train", streaming=True)
+        attacks: list[dict] = []
+        for row in ds:
+            if int(row.get("label", 0)) == 1:
+                text = str(row.get("text", "")).strip()
+                if 20 < len(text) < 2000:
+                    attacks.append({
+                        "text": text,
+                        "category": classify_prompt(text),
+                        "source": "jayavibhav-train",
+                    })
+                    if len(attacks) >= max_samples:
+                        break
+        print(f"    Got {len(attacks)} malicious prompts")
+        return attacks
+    except Exception as e:
+        print(f"    Failed: {e}")
+        return []
+
+
+def fetch_jayavibhav_train_benign(max_samples: int = 400) -> list[str]:
+    """Benign samples from jayavibhav train (hard negatives — similar to production FPs)."""
+    print("  Fetching jayavibhav/prompt-injection (train, benign)...")
+    try:
+        from datasets import load_dataset
+
+        ds = load_dataset("jayavibhav/prompt-injection", split="train", streaming=True)
+        benigns: list[str] = []
+        for row in ds:
+            if int(row.get("label", 1)) == 0:
+                text = str(row.get("text", "")).strip()
+                if 20 < len(text) < 2000:
+                    benigns.append(text)
+                    if len(benigns) >= max_samples:
+                        break
+        print(f"    Got {len(benigns)} benign prompts")
+        return benigns
+    except Exception as e:
+        print(f"    Failed: {e}")
+        return []
+
+
+def fetch_toxic_chat_benign(max_samples: int = 200) -> list[str]:
+    """Benign from lmsys/toxic-chat — production chat prompts, strong hard negatives."""
+    print("  Fetching lmsys/toxic-chat (benign prompts)...")
+    try:
+        from datasets import load_dataset
+
+        ds = load_dataset("lmsys/toxic-chat", "toxicchat0124", split="train")
+        benigns: list[str] = []
+        for row in ds:
+            # jailbreaking=0 AND toxicity=0 AND openai_moderation doesn't flag
+            if int(row.get("jailbreaking", 1)) == 0 and int(row.get("toxicity", 1)) == 0:
+                text = str(row.get("user_input", "")).strip()
+                if 20 < len(text) < 2000:
+                    benigns.append(text)
+                    if len(benigns) >= max_samples:
+                        break
+        print(f"    Got {len(benigns)} benign prompts")
+        return benigns
+    except Exception as e:
+        print(f"    Failed: {e}")
+        return []
+
+
+def fetch_jailbreakbench(max_samples: int = 100) -> list[dict]:
+    """JailbreakBench behaviors — curated harmful test set."""
+    print("  Fetching JailbreakBench/JBB-Behaviors...")
+    try:
+        from datasets import load_dataset
+
+        ds = load_dataset("JailbreakBench/JBB-Behaviors", "behaviors", split="harmful")
+        attacks: list[dict] = []
+        for row in ds:
+            text = str(row.get("Goal", "")).strip() or str(row.get("Target", "")).strip()
+            if 20 < len(text) < 2000:
+                attacks.append({
+                    "text": text,
+                    "category": classify_prompt(text),
+                    "source": "jailbreakbench",
+                })
+                if len(attacks) >= max_samples:
+                    break
+        print(f"    Got {len(attacks)} harmful prompts")
+        return attacks
+    except Exception as e:
+        print(f"    Failed: {e}")
+        return []
+
+
 def build_expanded_benchmark() -> None:
     print("=" * 60)
     print("EXPANDING BENCHMARK DATASET")
     print("=" * 60)
 
     attack_hashes = load_attack_db_hashes()
+    hard_neg_hashes = load_hard_negatives_hashes()
     print(f"Attack DB has {len(attack_hashes)} entries (excluded from benchmark)")
+    print(f"Hard negatives pool has {len(hard_neg_hashes)} entries (excluded from benchmark)")
 
     # ===========================
     # MALICIOUS SAMPLES
@@ -430,8 +548,10 @@ def build_expanded_benchmark() -> None:
 
     # HuggingFace datasets
     all_malicious.extend(fetch_deepset_test_malicious())
-    all_malicious.extend(fetch_wildjailbreak(100))
-    all_malicious.extend(fetch_jailbreak_classification(80))
+    all_malicious.extend(fetch_wildjailbreak(250))
+    all_malicious.extend(fetch_jailbreak_classification(150))
+    all_malicious.extend(fetch_jayavibhav_train_malicious(400))
+    all_malicious.extend(fetch_jailbreakbench(100))
 
     # Hand-crafted
     for a in COMPOUND_ATTACKS:
@@ -451,12 +571,12 @@ def build_expanded_benchmark() -> None:
             {"text": a["text"], "category": a["category"], "label": "malicious", "source": "hand-crafted-multilingual"}
         )
 
-    # Deduplicate and exclude attack DB entries
+    # Deduplicate and exclude attack DB entries + hard negatives (leakage guard)
     seen: set[str] = set()
     unique_malicious: list[dict] = []
     for entry in all_malicious:
         key = dedup_key(entry["text"])
-        if key not in seen and key not in attack_hashes:
+        if key not in seen and key not in attack_hashes and key not in hard_neg_hashes:
             seen.add(key)
             entry["label"] = "malicious"
             if "category" not in entry:
@@ -465,7 +585,7 @@ def build_expanded_benchmark() -> None:
 
     # Keep all unique malicious (no category cap — want maximum coverage)
     random.shuffle(unique_malicious)
-    final_malicious = unique_malicious[:500]
+    final_malicious = unique_malicious[:1000]
 
     print(f"\n   Malicious: {len(final_malicious)} (from {len(all_malicious)} collected)")
     cats: dict[str, int] = {}
@@ -481,10 +601,12 @@ def build_expanded_benchmark() -> None:
 
     all_benign: list[str] = []
 
-    # HuggingFace
-    all_benign.extend(fetch_deepset_benign(150))
+    # HuggingFace sources
+    all_benign.extend(fetch_deepset_benign(200))
+    all_benign.extend(fetch_jayavibhav_train_benign(400))
+    all_benign.extend(fetch_toxic_chat_benign(200))
 
-    # Hard negatives
+    # Hard negatives (hand-crafted)
     for h in HARD_NEGATIVES:
         all_benign.append(h["text"])
 
@@ -496,17 +618,17 @@ def build_expanded_benchmark() -> None:
                 entry = json.loads(line.strip())
                 all_benign.append(entry["text"])
 
-    # Deduplicate
+    # Deduplicate (and exclude hard negatives pool — used for L3 training)
     seen_benign: set[str] = set()
     unique_benign: list[str] = []
     for text in all_benign:
         key = dedup_key(text)
-        if key not in seen_benign:
+        if key not in seen_benign and key not in hard_neg_hashes:
             seen_benign.add(key)
             unique_benign.append(text)
 
     random.shuffle(unique_benign)
-    final_benign = [{"text": t, "label": "benign"} for t in unique_benign[:500]]
+    final_benign = [{"text": t, "label": "benign"} for t in unique_benign[:1000]]
     print(f"   Benign: {len(final_benign)}")
 
     # ===========================
