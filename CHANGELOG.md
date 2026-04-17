@@ -2,6 +2,27 @@
 
 All notable changes to prompt-armor will be documented in this file.
 
+## [Unreleased] — v0.8.0 WIP
+
+### Added
+- **Isotonic calibration** for `confidence` field (`fusion.py` + `train_fusion.py`). ECE 0.0342 → 0.0000 on held-out. Zero runtime deps (piecewise-linear lookup).
+- **L1 fuzzy keyword matching** — catches typo/leetspeak evasions: `igmre`, `ignroe`, `1gn0re`, `d1sreg4rd`, `f0rg3t`, fuzzy DAN persona. Conservative weight 0.70-0.78 + context-required.
+- **Unicode hardening** in engine — strips Unicode Tag chars (U+E0000-E007F, "ASCII smuggler" attack), Bidi override (U+202A-202E), folds Cyrillic/Greek homoglyphs (іgnore → ignore).
+- **Attack DB v2** (`known_attacks_v2.jsonl`) — 25,160 → 1,509 entries via semantic dedup (cosine >= 0.92) + quality filter (specificity >= 0.05 vs benign pool). Root-cause fix for L3 FPs on generic attacks.
+- **`scripts/dedup_attacks_semantic.py`** — reproducible dedup pipeline.
+- **`scripts/mine_hard_negatives.py`** — mines high-L3-score benigns from large datasets as hard negatives for contrastive retraining.
+- **Regression tests** — 11 new tests: TestL1FuzzyMatching, TestUnicodeNormalization.
+
+### Changed
+- L3 default attack DB path now prefers `known_attacks_v2.jsonl` (curated) with fallback to v1 for backward compat.
+- L3 contrastive retrained with 2,412 mined hard negatives from jayavibhav benigns (86% had L3 >= 0.3 before retrain).
+- `train_l3_contrastive.py` supports `--hard-negatives` flag; default loads from `internal/hard_negatives_l3.jsonl`.
+- F1 (internal 515): 94.01% → TBD (retrain in progress)
+- F1 (jayavibhav 1K): 90.96% → **91.37%** (post attack DB cleanup)
+
+### Fixed
+- Confidence was heuristic (distance-from-threshold) — now calibrated probability via IsotonicRegression fit on held-out.
+
 ## [0.7.0] - 2026-04-15
 
 ### Added
