@@ -125,7 +125,12 @@ def fuse_results(
     # Require corroboration unless the signal is overwhelming (>= 0.99).
     # L3 alone can reach 0.95+ on benign prompts (284/307 FPs on jayavibhav 327K).
     if max_score >= config.thresholds.hard_block:
+        # L5 counts as corroborator only when it's highly confident (>= 0.3),
+        # given its post-recalibration discrimination ratio (20.5% in malicious
+        # vs 3.7% in benign on internal benchmark v2).
         n_layers_with_signal = sum(1 for s in [l1, l2, l3, l4] if s > 0.1)
+        if l5 > 0.3:
+            n_layers_with_signal += 1
         if n_layers_with_signal >= 2:
             hb_evidence: list[Evidence] = []
             hb_categories: list[Category] = []
@@ -165,11 +170,18 @@ def fuse_results(
     logit = sum(f * c for f, c in zip(features, _META_COEFS)) + _META_INTERCEPT
     risk_score = _sigmoid(logit)
 
-    # --- L3 solo dampening (Phase 2) ---
+    # --- L3 solo dampening (Phase 2 + L5 corroboration A/B) ---
     # When L3 is the only layer with signal, dampen the score.
     # 83.7% of FPs on jayavibhav 327K dataset are L3-only.
-    # Dampening scales with L3 score: low L3 = likely FP, high L3 = possibly real.
-    l3_solo = l3 > 0.2 and l1 == 0 and l2 < 0.15 and l4 < 0.1
+    # L5 > 0.3 now counts as corroboration (post-recalibration: malicious 20%
+    # vs benign 3.7% at that threshold), so L3+L5 is NOT solo.
+    l3_solo = (
+        l3 > 0.2
+        and l1 == 0
+        and l2 < 0.15
+        and l4 < 0.1
+        and l5 <= 0.3  # L5 > 0.3 corroborates, not solo anymore
+    )
     if l3_solo:
         if l3 < 0.5:
             risk_score *= 0.3  # Low L3 — very likely FP
