@@ -28,8 +28,12 @@ from torch.utils.data import DataLoader, Dataset
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-ATTACK_DB = Path(__file__).parent.parent / "src" / "prompt_armor" / "data" / "attacks" / "known_attacks.jsonl"
+_V2_ATTACK_DB = Path(__file__).parent.parent / "src" / "prompt_armor" / "data" / "attacks" / "known_attacks_v2.jsonl"
+_V1_ATTACK_DB = Path(__file__).parent.parent / "src" / "prompt_armor" / "data" / "attacks" / "known_attacks.jsonl"
+# Prefer curated v2 DB (1.5K high-specificity attacks) if available
+ATTACK_DB = _V2_ATTACK_DB if _V2_ATTACK_DB.exists() else _V1_ATTACK_DB
 BENCHMARK_DIR = Path(__file__).parent.parent / "tests" / "benchmark" / "dataset"
+HARD_NEGATIVES_FILE = Path(__file__).parent.parent / "internal" / "hard_negatives_l3.jsonl"
 MODEL_OUTPUT = Path(__file__).parent.parent / "src" / "prompt_armor" / "data" / "models" / "l3-contrastive"
 BASE_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
 
@@ -83,6 +87,28 @@ def load_benign() -> list[str]:
     return benign
 
 
+def load_mined_hard_negatives(path: Path) -> list[str]:
+    """Load mined hard negatives (benigns with high L3 score).
+
+    These are the false positives the current L3 model struggles with.
+    Explicitly training against them teaches the model to separate benign
+    intent from attack intent in the embedding space.
+    """
+    if not path.exists():
+        return []
+    negatives = []
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            entry = json.loads(line)
+            text = entry.get("text", "").strip()
+            if 10 < len(text) < 1000:
+                negatives.append(text)
+    return negatives
+
+
 class TripletDataset(Dataset):
     """Triplet dataset: (anchor_attack, positive_attack, negative_benign)."""
 
@@ -114,6 +140,7 @@ def train(
     lr: float = 2e-5,
     margin: float = 0.3,
     num_triplets: int = 5000,
+    hard_negatives_file: Path | None = None,
 ) -> None:
     from sentence_transformers import SentenceTransformer
 
@@ -123,11 +150,18 @@ def train(
 
     # Load data
     print("\n1. Loading data...")
+    print(f"   Attack DB: {ATTACK_DB.name}")
     attacks = load_attacks()
     benign = load_benign()
-    all_negatives = HARD_NEGATIVES + benign
+    mined = load_mined_hard_negatives(hard_negatives_file or HARD_NEGATIVES_FILE)
+    # Mined hard negatives get 3x weight (appear 3x in pool) — they are
+    # the actual FPs we want the model to learn to separate.
+    all_negatives = HARD_NEGATIVES + benign + mined * 3
     print(f"   Attacks: {len(attacks)}")
-    print(f"   Negatives: {len(all_negatives)}")
+    print(f"   Benign (benchmark): {len(benign)}")
+    print(f"   Curated hard negatives: {len(HARD_NEGATIVES)}")
+    print(f"   Mined hard negatives (3x weight): {len(mined)}")
+    print(f"   Total negative pool: {len(all_negatives)}")
 
     # Build dataset
     dataset = TripletDataset(attacks, all_negatives, size=num_triplets)
@@ -256,6 +290,14 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--lr", type=float, default=2e-5)
-    parser.add_argument("--num-triplets", type=int, default=5000)
+    parser.add_argument("--num-triplets", type=int, default=15000)
+    parser.add_argument("--hard-negatives", type=Path, default=None,
+                        help="JSONL of mined hard negatives (default: internal/hard_negatives_l3.jsonl)")
     args = parser.parse_args()
-    train(epochs=args.epochs, batch_size=args.batch_size, lr=args.lr, num_triplets=args.num_triplets)
+    train(
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        lr=args.lr,
+        num_triplets=args.num_triplets,
+        hard_negatives_file=args.hard_negatives,
+    )
