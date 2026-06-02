@@ -43,17 +43,21 @@ def _get_engine():
 
 
 @mcp.tool()
-def analyze_prompt(prompt: str) -> dict:
+def analyze_prompt(prompt: str, session_id: str | None = None) -> dict:
     """Analyze a prompt for security risks including prompt injection, jailbreaks, and other LLM attacks.
 
     Args:
         prompt: The prompt text to analyze for security risks.
+        session_id: Optional stable id for one conversation/user. When set,
+            iterative-probing detection accumulates per session; state is
+            isolated per id, so it never leaks across unrelated callers. Omit
+            for stateless one-shot analysis.
 
     Returns:
         Analysis result with risk_score, decision, categories, and evidence.
     """
     engine = _get_engine()
-    result = engine.analyze(prompt)
+    result = engine.analyze(prompt, session_id=session_id)
     return result.to_dict()
 
 

@@ -11,6 +11,7 @@ The meta-classifier is just a dot product + sigmoid — zero latency overhead.
 from __future__ import annotations
 
 import math
+import random
 import time
 from collections import Counter
 
@@ -219,7 +220,7 @@ def fuse_results(
     needs_council = in_uncertain_zone and confidence < thresholds.min_confidence
 
     # --- Decision ---
-    decision = _decide(risk_score, _META_THRESHOLD)
+    decision = _decide(risk_score, _META_THRESHOLD, thresholds.jitter_sigma)
 
     # --- Aggregate evidence and categories ---
     all_evidence: list[Evidence] = []
@@ -242,17 +243,25 @@ def fuse_results(
     )
 
 
-def _decide(score: float, threshold: float) -> Decision:
-    """Map score to decision using meta-classifier threshold with jitter.
+def _decide(
+    score: float,
+    threshold: float,
+    jitter_sigma: float = 0.0,
+    rng: random.Random | None = None,
+) -> Decision:
+    """Map a risk score to a decision. Deterministic by default.
 
-    Per-request randomization prevents attackers from optimizing against
-    a known fixed threshold. The jitter is small (sigma=0.03) so it
-    doesn't meaningfully affect honest evaluations.
+    With ``jitter_sigma > 0``, the threshold is jittered DOWNWARD only (toward
+    more blocking) as an anti-optimization measure — it can never raise the bar,
+    so jitter cannot turn a would-be WARN/BLOCK into an ALLOW (the previous
+    symmetric jitter let a malicious 0.51 ALLOW ~37% of the time). Pass ``rng``
+    (a ``random.Random``) for reproducible decisions in tests/audits.
     """
-    import random
-
-    jittered = max(0.35, min(0.75, threshold + random.gauss(0, 0.03)))
-    if score < jittered:
+    effective = threshold
+    if jitter_sigma > 0:
+        r = rng if rng is not None else random
+        effective = max(0.35, threshold - abs(r.gauss(0, jitter_sigma)))
+    if score < effective:
         return Decision.ALLOW
     if score >= 0.8:
         return Decision.BLOCK
