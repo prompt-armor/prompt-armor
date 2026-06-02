@@ -29,6 +29,7 @@ dependencies = [
     "rich>=13.0",
     "pydantic>=2.0",
     "numpy>=1.24",
+    "regex>=2023.0",
 ]
 
 [project.optional-dependencies]
@@ -96,3 +97,8 @@ module = [
     "prompt_armor.council",
 ]
 ignore_errors = true
+
+# Third-party libs without type stubs
+[[tool.mypy.overrides]]
+module = ["regex", "regex.*"]
+ignore_missing_imports = true
