@@ -20,6 +20,7 @@ All notable changes to prompt-armor will be documented in this file.
 
 ### Performance
 - **L3 cold start cut ~35× by persisting the FAISS index.** L3 used to re-embed the entire attack corpus and rebuild the index on *every* engine construction (the dominant cold-start cost — paid on every CLI call, `docker run`, and per-message in the OpenClaw plugin). The built index is now cached to `~/.prompt-armor/cache/`, keyed by a signature over the attack-DB content + embedding-model file, and loaded on subsequent starts. Measured: L3 setup **13.8s → 0.4s** with byte-identical detection. Caching is best-effort — any read/write failure silently falls back to rebuilding, and a changed attack DB or model invalidates the cache automatically.
+- **Prebuilt FAISS index now ships in the wheel** (`src/prompt_armor/data/index/`, ~2.2 MB) so even the **first** `pip install` / `docker run` is fast — no corpus encode at all. The cache signature is now cross-machine-stable (keyed on the attack-DB content + the pinned model revision rather than file mtime), so the committed index matches any install; L3 loads bundled → user cache → rebuild, in that order. Regenerate with `python scripts/build_l3_index.py` when the v2 DB or L3 model revision changes (a CI test fails if the shipped index goes stale). The Docker image already warms the engine at build time, so `docker run` stays at warm latency.
 
 ## [0.8.1] - 2026-04-17
 

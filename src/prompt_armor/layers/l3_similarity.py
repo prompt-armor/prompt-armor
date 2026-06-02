@@ -48,66 +48,77 @@ _ONNX_MODEL_REVISION = "e634d5b16c26d71c7b841ef56c13c18a7dd5f49d"
 _HIGH_SIMILARITY = 0.75
 _MEDIUM_SIMILARITY = 0.60
 
-# Persisted FAISS index cache. Re-embedding the whole attack corpus on every
-# engine construction is the dominant cold-start cost (~tens of seconds). When
-# the attack DB and the embedding model are unchanged, we load a prebuilt index
-# from disk and skip the encode entirely. Caching is best-effort: any failure
-# silently falls back to rebuilding, so it can never break setup.
+# Persisted FAISS index. Re-embedding the whole attack corpus on every engine
+# construction is the dominant cold-start cost (~tens of seconds). We load a
+# prebuilt index and skip the encode, from two sources, in order:
+#   1. A bundled index shipped in the wheel (data/index/) — so even the FIRST
+#      run after `pip install` / `docker run` is fast, no encode at all.
+#   2. A user cache (~/.prompt-armor/cache/) written on first build — covers a
+#      stale/absent bundled index (e.g. a locally-updated attack DB).
+# The signature pins the attack-DB CONTENT + the pinned model REVISION, so it is
+# stable across machines (independent of file mtime) — the prerequisite for a
+# shippable prebuilt index. Best-effort throughout: any failure falls back to
+# rebuilding and can never break setup.
+_BUNDLED_INDEX_PATH = Path(__file__).parent.parent / "data" / "index" / "l3_faiss_index.bin"
+_BUNDLED_META_PATH = Path(__file__).parent.parent / "data" / "index" / "l3_index_meta.json"
 _CACHE_DIR = Path.home() / ".prompt-armor" / "cache"
-_INDEX_CACHE_PATH = _CACHE_DIR / "l3_faiss_index.bin"
-_INDEX_META_PATH = _CACHE_DIR / "l3_index_meta.json"
-# Bump when index-build logic changes (filter, dim, normalization) to invalidate
-# any stale on-disk caches.
-_INDEX_CACHE_VERSION = "1"
+_USER_INDEX_PATH = _CACHE_DIR / "l3_faiss_index.bin"
+_USER_META_PATH = _CACHE_DIR / "l3_index_meta.json"
+# Bump when the index-build logic (filter, dim, normalization) or the signature
+# scheme changes, to invalidate stale on-disk indexes.
+_INDEX_CACHE_VERSION = "2"
 
 
-def _index_cache_sig(attacks_path: Path, model_path: Path) -> str | None:
-    """Signature over (attack DB content + model identity + build version).
+def _index_cache_sig(attacks_path: Path) -> str | None:
+    """Cross-machine-stable signature over (build version + pinned model
+    revision + attack-DB content). Independent of file mtimes, so a prebuilt
+    index built on one machine matches any install of the same package.
 
-    Returns None if inputs can't be read, in which case caching is skipped.
+    Returns None if the DB can't be read (caching is then skipped). Keyed on the
+    pinned ``_ONNX_MODEL_REVISION`` rather than the model bytes — if you swap the
+    ONNX model locally, bump that revision (or ``_INDEX_CACHE_VERSION``) so the
+    index is rebuilt.
     """
     try:
         h = hashlib.sha256()
-        h.update(_INDEX_CACHE_VERSION.encode())
+        h.update(f"{_INDEX_CACHE_VERSION}:{_ONNX_MODEL_REVISION}:".encode())
         with open(attacks_path, "rb") as f:
             for chunk in iter(lambda: f.read(1 << 20), b""):
                 h.update(chunk)
-        st = model_path.stat()
-        h.update(f"{st.st_size}:{st.st_mtime_ns}".encode())
         return h.hexdigest()[:24]
     except OSError:
         return None
 
 
-def _load_index_cache(sig: str) -> tuple[Any, list[dict[str, str]]] | None:
+def _load_index(sig: str, index_path: Path, meta_path: Path) -> tuple[Any, list[dict[str, str]]] | None:
     """Load a persisted index iff its signature matches. Best-effort."""
     try:
-        if not _INDEX_CACHE_PATH.exists() or not _INDEX_META_PATH.exists():
+        if not index_path.exists() or not meta_path.exists():
             return None
-        meta = json.loads(_INDEX_META_PATH.read_text())
+        meta = json.loads(meta_path.read_text())
         if meta.get("sig") != sig:
             return None
         import faiss
 
-        index = faiss.read_index(str(_INDEX_CACHE_PATH))
+        index = faiss.read_index(str(index_path))
         return index, meta["attack_metadata"]
-    except Exception as e:  # corrupt cache / version skew -> rebuild
-        logger.warning("L3: ignoring unreadable index cache: %s", e)
+    except Exception as e:  # corrupt / version skew -> rebuild
+        logger.warning("L3: ignoring unreadable index at %s: %s", index_path, e)
         return None
 
 
-def _save_index_cache(sig: str, index: Any, attack_metadata: list[dict[str, str]]) -> None:
-    """Persist the index + metadata atomically. Best-effort (never raises)."""
+def _save_user_cache(sig: str, index: Any, attack_metadata: list[dict[str, str]]) -> None:
+    """Persist the built index to the writable user cache, atomically. Best-effort."""
     try:
         import faiss
 
         _CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        tmp_index = _INDEX_CACHE_PATH.parent / (_INDEX_CACHE_PATH.name + ".tmp")
-        tmp_meta = _INDEX_META_PATH.parent / (_INDEX_META_PATH.name + ".tmp")
+        tmp_index = _USER_INDEX_PATH.parent / (_USER_INDEX_PATH.name + ".tmp")
+        tmp_meta = _USER_META_PATH.parent / (_USER_META_PATH.name + ".tmp")
         faiss.write_index(index, str(tmp_index))
         tmp_meta.write_text(json.dumps({"sig": sig, "attack_metadata": attack_metadata}))
-        tmp_index.replace(_INDEX_CACHE_PATH)
-        tmp_meta.replace(_INDEX_META_PATH)
+        tmp_index.replace(_USER_INDEX_PATH)
+        tmp_meta.replace(_USER_META_PATH)
     except Exception as e:
         logger.warning("L3: could not write index cache: %s", e)
 
@@ -230,20 +241,25 @@ class L3SimilarityLayer(BaseLayer):
         attacks_path = self._config.attacks_path or _DEFAULT_ATTACKS_PATH
 
         # Fast path: load a persisted index to skip re-encoding the corpus (the
-        # dominant cold-start cost). ONNX path only; the signature pins both the
-        # attack DB content and the model file.
+        # dominant cold-start cost). ONNX path only. Prefer the bundled index
+        # shipped in the wheel, then the user cache.
         cache_sig: str | None = None
         if self._use_onnx:
-            cache_sig = _index_cache_sig(attacks_path, onnx_model)
+            cache_sig = _index_cache_sig(attacks_path)
             if cache_sig is not None:
-                cached = _load_index_cache(cache_sig)
-                if cached is not None:
-                    self._index, self._attack_metadata = cached
-                    logger.info(
-                        "L3: loaded cached FAISS index (%d vectors) — skipped corpus encode",
-                        self._index.ntotal,
-                    )
-                    return
+                for label, ipath, mpath in (
+                    ("bundled", _BUNDLED_INDEX_PATH, _BUNDLED_META_PATH),
+                    ("cached", _USER_INDEX_PATH, _USER_META_PATH),
+                ):
+                    loaded = _load_index(cache_sig, ipath, mpath)
+                    if loaded is not None:
+                        self._index, self._attack_metadata = loaded
+                        logger.info(
+                            "L3: loaded %s FAISS index (%d vectors) — skipped corpus encode",
+                            label,
+                            self._index.ntotal,
+                        )
+                        return
 
         texts: list[str] = []
         self._attack_metadata = []
@@ -289,9 +305,9 @@ class L3SimilarityLayer(BaseLayer):
             self._index = faiss.IndexFlatIP(dim)
             self._index.add(embeddings)
 
-        # Persist the built index so the next cold start skips the encode.
+        # Persist the built index to the user cache so the next start skips the encode.
         if cache_sig is not None:
-            _save_index_cache(cache_sig, self._index, self._attack_metadata)
+            _save_user_cache(cache_sig, self._index, self._attack_metadata)
 
     def analyze(self, text: str) -> LayerResult:
         """Compare prompt against known attacks via cosine similarity."""

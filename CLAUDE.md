@@ -43,6 +43,10 @@ python scripts/build_attack_db.py --max-per-source 20000
 
 # Contrastive fine-tune L3 embeddings (~50min on CPU)
 python scripts/train_l3_contrastive.py
+
+# Regenerate the prebuilt L3 FAISS index shipped in the wheel
+# (run after changing the v2 attack DB or the pinned L3 model revision)
+python scripts/build_l3_index.py
 ```
 
 ## Architecture
