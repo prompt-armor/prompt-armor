@@ -91,22 +91,78 @@ _INVISIBLE_CHARS = re.compile(
 # Homoglyph fold: map common Cyrillic/Greek/fullwidth lookalikes to ASCII Latin.
 # Keeps detection focused on intent, not on which script was used to write it.
 # Applied AFTER NFKC so fullwidth variants are normalized first.
-_HOMOGLYPH_MAP = str.maketrans({
-    # Cyrillic → Latin (lowercase)
-    "а": "a", "в": "b", "е": "e", "ё": "e", "з": "z", "и": "i", "і": "i",
-    "й": "i", "к": "k", "м": "m", "н": "h", "о": "o", "р": "p", "с": "c",
-    "т": "t", "у": "y", "х": "x", "ѕ": "s", "ј": "j", "ԛ": "q", "ԝ": "w",
-    # Cyrillic → Latin (uppercase)
-    "А": "A", "В": "B", "Е": "E", "Ё": "E", "З": "Z", "И": "I", "І": "I",
-    "К": "K", "М": "M", "Н": "H", "О": "O", "Р": "P", "С": "C", "Т": "T",
-    "У": "Y", "Х": "X", "Ѕ": "S", "Ј": "J", "Ԛ": "Q", "Ԝ": "W",
-    # Greek → Latin
-    "α": "a", "ο": "o", "ρ": "p", "ν": "v", "ε": "e", "τ": "t", "κ": "k",
-    "ι": "i", "μ": "m", "η": "n",
-    "Α": "A", "Β": "B", "Ε": "E", "Ζ": "Z", "Η": "H", "Ι": "I",
-    "Κ": "K", "Μ": "M", "Ν": "N", "Ο": "O", "Ρ": "P", "Τ": "T",
-    "Υ": "Y", "Χ": "X",
-})
+_HOMOGLYPH_MAP = str.maketrans(
+    {
+        # Cyrillic → Latin (lowercase)
+        "а": "a",
+        "в": "b",
+        "е": "e",
+        "ё": "e",
+        "з": "z",
+        "и": "i",
+        "і": "i",
+        "й": "i",
+        "к": "k",
+        "м": "m",
+        "н": "h",
+        "о": "o",
+        "р": "p",
+        "с": "c",
+        "т": "t",
+        "у": "y",
+        "х": "x",
+        "ѕ": "s",
+        "ј": "j",
+        "ԛ": "q",
+        "ԝ": "w",
+        # Cyrillic → Latin (uppercase)
+        "А": "A",
+        "В": "B",
+        "Е": "E",
+        "Ё": "E",
+        "З": "Z",
+        "И": "I",
+        "І": "I",
+        "К": "K",
+        "М": "M",
+        "Н": "H",
+        "О": "O",
+        "Р": "P",
+        "С": "C",
+        "Т": "T",
+        "У": "Y",
+        "Х": "X",
+        "Ѕ": "S",
+        "Ј": "J",
+        "Ԛ": "Q",
+        "Ԝ": "W",
+        # Greek → Latin
+        "α": "a",
+        "ο": "o",
+        "ρ": "p",
+        "ν": "v",
+        "ε": "e",
+        "τ": "t",
+        "κ": "k",
+        "ι": "i",
+        "μ": "m",
+        "η": "n",
+        "Α": "A",
+        "Β": "B",
+        "Ε": "E",
+        "Ζ": "Z",
+        "Η": "H",
+        "Ι": "I",
+        "Κ": "K",
+        "Μ": "M",
+        "Ν": "N",
+        "Ο": "O",
+        "Ρ": "P",
+        "Τ": "T",
+        "Υ": "Y",
+        "Χ": "X",
+    }
+)
 
 
 def _normalize_text(text: str) -> str:
