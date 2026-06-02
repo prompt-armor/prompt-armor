@@ -9,6 +9,7 @@ Pure statistical features, <1ms inference. Requires scikit-learn.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import math
 import re
@@ -27,12 +28,51 @@ logger = logging.getLogger("prompt_armor")
 
 _MODEL_PATH = Path(__file__).parent.parent / "data" / "models" / "l5_negative_selection.pkl"
 
-_INJECTION_KEYWORDS = frozenset({
-    "ignore", "forget", "disregard", "override", "bypass", "skip",
-    "instructions", "prompt", "system", "previous", "above", "rules",
-    "pretend", "roleplay", "jailbreak", "dan", "unrestricted",
-    "decode", "base64", "translate", "morse", "hex", "binary",
-})
+# Pinned model revision + content hash for supply-chain security.
+# The L5 model is a joblib/pickle artifact: deserializing it executes arbitrary
+# code, so an unpinned/unverified download is a remote-code-execution vector.
+# We pin the HuggingFace revision AND verify the sha256 before joblib.load.
+# (To roll the model, update BOTH constants to the new revision + file hash.)
+_MODEL_REVISION = "0811ac41857875e916427f086877aed2b68ba3bc"
+_MODEL_SHA256 = "5d2e063e6f66f9d1c40b857c561443a626e2da66c85b9eebc42a9498db4ae781"
+
+
+def _sha256(path: Path) -> str:
+    """Streaming sha256 of a file (constant memory)."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+_INJECTION_KEYWORDS = frozenset(
+    {
+        "ignore",
+        "forget",
+        "disregard",
+        "override",
+        "bypass",
+        "skip",
+        "instructions",
+        "prompt",
+        "system",
+        "previous",
+        "above",
+        "rules",
+        "pretend",
+        "roleplay",
+        "jailbreak",
+        "dan",
+        "unrestricted",
+        "decode",
+        "base64",
+        "translate",
+        "morse",
+        "hex",
+        "binary",
+    }
+)
 
 _DELIMITER_PATTERNS = re.compile(
     r"(\[system\]|\[inst\]|<\|im_start\|>|<\|im_end\|>|### ?system|### ?instruction|```system)",
@@ -155,6 +195,7 @@ class L5NegativeSelectionLayer(BaseLayer):
             hf_hub_download(
                 repo_id="prompt-armor/l5-negative-selection",
                 filename="l5_negative_selection.pkl",
+                revision=_MODEL_REVISION,
                 local_dir=str(_MODEL_PATH.parent),
             )
             logger.info("L5: model downloaded")
@@ -162,14 +203,25 @@ class L5NegativeSelectionLayer(BaseLayer):
             logger.warning("L5: auto-download failed: %s", e)
 
     def setup(self) -> None:
-        """Load the trained Isolation Forest model."""
-        import joblib
+        """Load the trained Isolation Forest model.
 
+        Verifies the artifact's sha256 BEFORE deserializing — joblib.load runs
+        arbitrary code, so loading an unverified pickle is an RCE vector.
+        """
         if not _MODEL_PATH.exists():
             self._download_model()
 
         if not _MODEL_PATH.exists():
             raise FileNotFoundError(f"L5 model not found at {_MODEL_PATH}. Run: python scripts/train_l5_model.py")
+
+        actual = _sha256(_MODEL_PATH)
+        if actual != _MODEL_SHA256:
+            raise ValueError(
+                f"L5 model integrity check failed: expected sha256 {_MODEL_SHA256}, got {actual}. "
+                f"Refusing to load untrusted pickle at {_MODEL_PATH}."
+            )
+
+        import joblib
 
         data = joblib.load(_MODEL_PATH)
         self._model = data["model"]
