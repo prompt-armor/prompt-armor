@@ -139,7 +139,7 @@ export default function register(api: any) {
     {
       name: "prompt-armor.message-scan",
       description:
-        "Scans every incoming message for prompt injection attacks using 4 parallel analysis layers",
+        "Scans every incoming message for prompt injection attacks using 5 parallel analysis layers",
     }
   );
 
