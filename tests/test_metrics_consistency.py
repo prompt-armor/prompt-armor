@@ -34,7 +34,7 @@ _LIVE_FILES = [
 ]
 
 # The ONLY F1 figures allowed in live surfaces.
-_CANONICAL_F1 = {"86.9", "98.87"}
+_CANONICAL_F1 = {"84.4", "98.87"}
 
 # Stale headline latencies that the reconciliation removed. (Competitor latencies
 # like ~50ms / ~100ms in the comparison table are fine — hence a denylist, not an
@@ -73,4 +73,4 @@ def test_no_stale_headline_latency(path):
 def test_canonical_numbers_are_actually_present():
     """Sanity: the README must contain both canonical F1 figures (guards a typo'd allowlist)."""
     readme = (_ROOT / "README.md").read_text()
-    assert "86.9%" in readme and "98.87%" in readme
+    assert "84.4%" in readme and "98.87%" in readme

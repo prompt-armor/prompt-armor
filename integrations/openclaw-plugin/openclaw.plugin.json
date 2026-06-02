@@ -1,7 +1,7 @@
 {
   "id": "prompt-armor",
   "name": "Prompt Armor",
-  "description": "Detect prompt injection, jailbreaks, and adversarial attacks in every incoming message. 5 analysis layers, F1 86.9% internal / 98.87% external, ~24ms, runs offline.",
+  "description": "Detect prompt injection, jailbreaks, and adversarial attacks in every incoming message. 5 analysis layers, F1 84.4% internal / 98.87% external, ~24ms, runs offline.",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,

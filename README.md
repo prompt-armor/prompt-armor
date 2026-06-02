@@ -243,12 +243,12 @@ We report **two numbers** — the harder internal benchmark and the same-distrib
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| **F1 Score** | **86.9%** | Canonical headline metric |
-| **Precision** | 94.6% | 26 false positives |
-| **Recall** | 80.4% | ~1 in 5 attacks miss (model is precision-leaning) |
+| **F1 Score** | **84.4%** | Canonical headline metric |
+| **Precision** | 94.5% | 26 false positives |
+| **Recall** | 76.3% | ~1 in 5 attacks miss (model is precision-leaning) |
 | **Avg Latency** | ~24ms | Warm. First call adds a one-time model load + FAISS index build, cached after the first run |
 
-> Honesty note: fusion thresholds/coefficients are currently tuned on this benchmark (no holdout), so 86.9% is an in-sample number. A leakage guard (`tests/test_no_leakage.py`) confirms benchmark↔attack-DB overlap stays low (~1.9%); a held-out out-of-sample number is tracked as future work.
+> Honesty note: fusion thresholds/coefficients are currently tuned on this benchmark (no holdout), so 84.4% is an in-sample number. A leakage guard (`tests/test_no_leakage.py`) confirms benchmark↔attack-DB overlap stays low (~1.9%); a held-out out-of-sample number is tracked as future work.
 
 **External evaluation** ([jayavibhav/prompt-injection](https://huggingface.co/datasets/jayavibhav/prompt-injection), 1K real-world samples):
 
