@@ -13,6 +13,7 @@ All notable changes to prompt-armor will be documented in this file.
 - `tests/unit/test_redos.py` — per-rule ReDoS time-budget guard across every rule + fuzzy pattern (regression test for DE-001/IB-001 and a gate for future contributed rules).
 - `tests/unit/test_model_integrity.py` — verifies the L5 pickle integrity gate rejects a tampered artifact and that L3/L5 pin their model revisions.
 - `regex>=2023.0` is now a core runtime dependency (drives the L1 matching engine + timeout).
+- **Benchmark leakage audit + CI guard** (`scripts/audit_leakage.py`, `tests/test_no_leakage.py`). Quantifies benchmark↔attack-DB overlap with whitespace/markdown-normalized + token-Jaccard matching (not just SHA-exact). Finding: overlap with the v2 index L3 actually uses is low (~1.6% normalized-exact, ~1.9% near-dup); the guard fails CI if a future dataset/DB refresh reintroduces near-duplicates above 5%.
 
 ### Performance
 - **L3 cold start cut ~35× by persisting the FAISS index.** L3 used to re-embed the entire attack corpus and rebuild the index on *every* engine construction (the dominant cold-start cost — paid on every CLI call, `docker run`, and per-message in the OpenClaw plugin). The built index is now cached to `~/.prompt-armor/cache/`, keyed by a signature over the attack-DB content + embedding-model file, and loaded on subsequent starts. Measured: L3 setup **13.8s → 0.4s** with byte-identical detection. Caching is best-effort — any read/write failure silently falls back to rebuilding, and a changed attack DB or model invalidates the cache automatically.
