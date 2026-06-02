@@ -12,6 +12,7 @@ import math
 import re
 import string
 import time
+import unicodedata
 
 from prompt_armor.config import ShieldConfig
 from prompt_armor.layers.base import BaseLayer
@@ -80,8 +81,12 @@ _PRIVILEGE_KEYWORDS = {
     "debug",
     "god",
     "master",
-    "override",
 }
+# NB: "override" is intentionally NOT a privilege keyword — it is a normal
+# programming verb ("override a method") and double-counting it here (it is
+# already an imperative verb) drove benign code questions to a false BLOCK.
+# Attack phrasings like "override your instructions" are still caught via the
+# imperative-verb ratio and the L1 rules.
 
 
 class L4StructuralLayer(BaseLayer):
@@ -359,6 +364,18 @@ def _privilege_escalation_density(words: list[str], word_count: int) -> float:
     return priv_count / word_count
 
 
+def _is_latin_letter(c: str) -> bool:
+    """True for ASCII a-z/A-Z and accented Latin-script letters (é, ñ, ç, ü, …);
+    False for other scripts (Cyrillic, Greek, CJK, Arabic, …). Lets DE/ES/FR/PT
+    text pass without being mistaken for an encoding/homoglyph trick."""
+    if "a" <= c.lower() <= "z":
+        return True
+    try:
+        return unicodedata.name(c).startswith("LATIN")
+    except ValueError:
+        return False
+
+
 def _detect_encoding_tricks(text: str) -> float:
     """Detect potential encoding-based obfuscation."""
     score = 0.0
@@ -385,9 +402,12 @@ def _detect_encoding_tricks(text: str) -> float:
         except Exception:
             pass
 
-    # Homoglyph detection (Cyrillic/Greek chars in otherwise Latin text)
-    latin_count = sum(1 for c in text if "a" <= c.lower() <= "z")
-    non_latin_alpha = sum(1 for c in text if c.isalpha() and not ("a" <= c.lower() <= "z"))
+    # Mixed-script detection (Cyrillic/Greek/CJK letters smuggled into otherwise
+    # Latin text). Accented Latin letters (ç, ã, é, ñ, ü, …) are legitimate in
+    # DE/ES/FR/PT and must NOT count — they previously flagged all accented
+    # multilingual text as an "encoding trick" (score 0.6).
+    latin_count = sum(1 for c in text if c.isalpha() and _is_latin_letter(c))
+    non_latin_alpha = sum(1 for c in text if c.isalpha() and not _is_latin_letter(c))
     if latin_count > 10 and non_latin_alpha > 0:
         ratio = non_latin_alpha / (latin_count + non_latin_alpha)
         if 0.01 < ratio < 0.3:  # Mixed scripts — suspicious
