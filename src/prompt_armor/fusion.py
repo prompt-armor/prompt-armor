@@ -47,10 +47,26 @@ _META_THRESHOLD = 0.50  # Optimal F1 threshold
 # ECE before: 0.0342, after: 0.0000 (perfect on held-out).
 # Piecewise-linear lookup for zero-dependency runtime.
 _CALIBRATION_POINTS: list[tuple[float, float]] = [
-    (0.0, 0.0), (0.05, 0.0), (0.1, 0.0), (0.15, 0.0), (0.2, 0.0),
-    (0.25, 0.0), (0.3, 0.0), (0.35, 0.0), (0.4, 0.042), (0.45, 0.0912),
-    (0.5, 0.1404), (0.55, 0.1896), (0.6, 0.2389), (0.65, 0.25), (0.7, 0.3141),
-    (0.75, 0.5), (0.8, 0.5047), (0.85, 0.6021), (0.9, 0.6667), (0.95, 1.0),
+    (0.0, 0.0),
+    (0.05, 0.0),
+    (0.1, 0.0),
+    (0.15, 0.0),
+    (0.2, 0.0),
+    (0.25, 0.0),
+    (0.3, 0.0),
+    (0.35, 0.0),
+    (0.4, 0.042),
+    (0.45, 0.0912),
+    (0.5, 0.1404),
+    (0.55, 0.1896),
+    (0.6, 0.2389),
+    (0.65, 0.25),
+    (0.7, 0.3141),
+    (0.75, 0.5),
+    (0.8, 0.5047),
+    (0.85, 0.6021),
+    (0.9, 0.6667),
+    (0.95, 1.0),
     (1.0, 1.0),
 ]
 
@@ -163,7 +179,9 @@ def fuse_results(
         min(l1, l2, l3, l4, l5),  # min_score
         l1 * l4,  # l1 × l4 interaction
         l2 * l3,  # l2 × l3 interaction
-        sum(1.0 for x in [l1, l2, l3, l4] if x > 0.1),  # n_above_0.1 (L5 excluded — contributes via hard block + l3_solo)
+        sum(
+            1.0 for x in [l1, l2, l3, l4] if x > 0.1
+        ),  # n_above_0.1 (L5 excluded — contributes via hard block + l3_solo)
     ]
 
     # Dot product + sigmoid
@@ -176,11 +194,7 @@ def fuse_results(
     # L5 > 0.3 now counts as corroboration (post-recalibration: malicious 20%
     # vs benign 3.7% at that threshold), so L3+L5 is NOT solo.
     l3_solo = (
-        l3 > 0.2
-        and l1 == 0
-        and l2 < 0.15
-        and l4 < 0.1
-        and l5 <= 0.3  # L5 > 0.3 corroborates, not solo anymore
+        l3 > 0.2 and l1 == 0 and l2 < 0.15 and l4 < 0.1 and l5 <= 0.3  # L5 > 0.3 corroborates, not solo anymore
     )
     if l3_solo:
         if l3 < 0.5:
