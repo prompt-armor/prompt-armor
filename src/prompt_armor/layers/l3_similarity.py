@@ -38,6 +38,12 @@ _ONNX_MODEL_PATH = Path(__file__).parent.parent / "data" / "models" / "l3-contra
 _CONTRASTIVE_MODEL_PATH = Path(__file__).parent.parent / "data" / "models" / "l3-contrastive"
 _DEFAULT_MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
 
+# Pinned revision for supply-chain security (mirrors L2's revision pin). The L3
+# ONNX graph is data (not code-bearing like the L5 pickle), so revision pinning
+# is the proportionate control: an attacker cannot swap the artifact served
+# under a fixed commit hash.
+_ONNX_MODEL_REVISION = "e634d5b16c26d71c7b841ef56c13c18a7dd5f49d"
+
 # Similarity thresholds
 _HIGH_SIMILARITY = 0.75
 _MEDIUM_SIMILARITY = 0.60
@@ -138,11 +144,13 @@ class L3SimilarityLayer(BaseLayer):
             hf_hub_download(
                 repo_id="prompt-armor/l3-contrastive-onnx",
                 filename="model_quant.onnx",
+                revision=_ONNX_MODEL_REVISION,
                 local_dir=str(_ONNX_MODEL_PATH),
             )
             hf_hub_download(
                 repo_id="prompt-armor/l3-contrastive-onnx",
                 filename="tokenizer.json",
+                revision=_ONNX_MODEL_REVISION,
                 local_dir=str(_ONNX_MODEL_PATH),
             )
             logger.info("L3: ONNX model downloaded")

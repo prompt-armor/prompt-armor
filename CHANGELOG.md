@@ -4,6 +4,16 @@ All notable changes to prompt-armor will be documented in this file.
 
 ## [Unreleased]
 
+### Security
+- **Fixed ReDoS (catastrophic backtracking) in L1 rules DE-001 and IB-001.** `DE-001`'s `\S+@\S+\.\S+` email matcher backtracked exponentially (a crafted ~16KB input pinned a CPU core for minutes); `IB-001`'s unbounded `\s*` runs backtracked polynomially (~590ms on a whitespace flood). Both are now linear (bounded, non-overlapping character classes). Detection of real exfiltration / delimiter-injection attacks is unchanged. This closed an unauthenticated CPU-exhaustion DoS for any service calling `analyze()` on user input.
+- **L1 now matches under a hard per-search timeout** via the `regex` module (a backtracking-resistant superset of stdlib `re`). The engine's per-layer `ThreadPoolExecutor` timeout cannot preempt a GIL-holding `re` backtrack — `regex`'s `timeout=` can. A rule exceeding the budget is skipped (fail-open at the rule level), so a future ReDoS in a contributed rule can no longer hang a worker thread.
+- **Pinned model revisions + sha256 verification for auto-downloaded artifacts.** L5 `joblib.load`ed an *unpinned, unverified* pickle from HuggingFace — a remote-code-execution vector on first run if the repo or account were compromised. L5 now pins the HF revision **and** verifies the file's sha256 before deserializing; L3's ONNX download is revision-pinned to match L2 (which was already pinned).
+
+### Added
+- `tests/unit/test_redos.py` — per-rule ReDoS time-budget guard across every rule + fuzzy pattern (regression test for DE-001/IB-001 and a gate for future contributed rules).
+- `tests/unit/test_model_integrity.py` — verifies the L5 pickle integrity gate rejects a tampered artifact and that L3/L5 pin their model revisions.
+- `regex>=2023.0` is now a core runtime dependency (drives the L1 matching engine + timeout).
+
 ### Performance
 - **L3 cold start cut ~35× by persisting the FAISS index.** L3 used to re-embed the entire attack corpus and rebuild the index on *every* engine construction (the dominant cold-start cost — paid on every CLI call, `docker run`, and per-message in the OpenClaw plugin). The built index is now cached to `~/.prompt-armor/cache/`, keyed by a signature over the attack-DB content + embedding-model file, and loaded on subsequent starts. Measured: L3 setup **13.8s → 0.4s** with byte-identical detection. Caching is best-effort — any read/write failure silently falls back to rebuilding, and a changed attack DB or model invalidates the cache automatically.
 

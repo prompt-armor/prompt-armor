@@ -201,7 +201,7 @@ rules:
 
   # === DATA EXFILTRATION ===
   - id: "DE-001"
-    pattern: "(send|forward|email|transmit|post|upload|transfer)\\s+.{0,40}(to\\s+)?(https?://|\\S+@\\S+\\.\\S+)"
+    pattern: "(send|forward|email|transmit|post|upload|transfer)\\s+.{0,40}(to\\s+)?(https?://|[^\\s@]{1,64}@[^\\s@]{1,255}\\.[^\\s]{2,24})"
     category: "data_exfiltration"
     weight: 0.82
     description: "Send data to external URL/email"
@@ -239,7 +239,7 @@ rules:
 
   # === INSTRUCTION BYPASS ===
   - id: "IB-001"
-    pattern: "(\\[|\\{|<)\\s*/?\\s*(system|SYSTEM|instructions?|INST|\\|im_start\\|)\\s*(\\]|\\}|>)"
+    pattern: "(\\[|\\{|<)\\s{0,8}/?\\s{0,8}(system|SYSTEM|instructions?|INST|\\|im_start\\|)\\s{0,8}(\\]|\\}|>)"
     category: "instruction_bypass"
     weight: 0.88
     description: "Delimiter injection (system/INST tags)"
