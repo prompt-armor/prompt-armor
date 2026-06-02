@@ -25,11 +25,15 @@ _default_engine: LiteEngine | None = None
 _engine_lock = threading.Lock()
 
 
-def analyze(text: str) -> ShieldResult:
+def analyze(text: str, session_id: str | None = None) -> ShieldResult:
     """Analyze a prompt for security risks.
 
     One-call API that lazily initializes the default engine.
     Thread-safe via double-checked locking.
+
+    Stateless by default. Pass a stable ``session_id`` (per user/connection) to
+    enable per-session iterative-probing detection; state is isolated per
+    session, so the shared default engine never leaks history across callers.
     For custom config, use LiteEngine(config=...) directly.
     """
     global _default_engine
@@ -37,4 +41,4 @@ def analyze(text: str) -> ShieldResult:
         with _engine_lock:
             if _default_engine is None:
                 _default_engine = LiteEngine()
-    return _default_engine.analyze(text)
+    return _default_engine.analyze(text, session_id=session_id)

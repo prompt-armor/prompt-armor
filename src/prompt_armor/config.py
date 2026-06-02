@@ -24,6 +24,11 @@ class ThresholdConfig(BaseModel):
     block_above: float = Field(default=0.7, ge=0.0, le=1.0)
     hard_block: float = Field(default=0.95, ge=0.0, le=1.0)
     min_confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+    # Optional anti-optimization jitter on the decision threshold. Default 0.0 =
+    # deterministic, reproducible decisions (recommended for a security control).
+    # When > 0, the threshold is jittered DOWNWARD only (more conservative), so
+    # jitter can never turn a would-be WARN/BLOCK into an ALLOW.
+    jitter_sigma: float = Field(default=0.0, ge=0.0, le=0.2)
 
 
 class AnalyticsConfig(BaseModel):
