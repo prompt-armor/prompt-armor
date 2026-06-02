@@ -14,6 +14,9 @@ All notable changes to prompt-armor will be documented in this file.
 - `tests/unit/test_model_integrity.py` — verifies the L5 pickle integrity gate rejects a tampered artifact and that L3/L5 pin their model revisions.
 - `regex>=2023.0` is now a core runtime dependency (drives the L1 matching engine + timeout).
 
+### Performance
+- **L3 cold start cut ~35× by persisting the FAISS index.** L3 used to re-embed the entire attack corpus and rebuild the index on *every* engine construction (the dominant cold-start cost — paid on every CLI call, `docker run`, and per-message in the OpenClaw plugin). The built index is now cached to `~/.prompt-armor/cache/`, keyed by a signature over the attack-DB content + embedding-model file, and loaded on subsequent starts. Measured: L3 setup **13.8s → 0.4s** with byte-identical detection. Caching is best-effort — any read/write failure silently falls back to rebuilding, and a changed attack DB or model invalidates the cache automatically.
+
 ## [0.8.1] - 2026-04-17
 
 Robustness patch — expanded benchmarks and defensive L5 corroboration. No model changes; v0.8.0 API and HuggingFace artifacts unchanged.
