@@ -10,6 +10,7 @@ Falls back to sentence-transformers if ONNX model not available.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import time
@@ -40,6 +41,69 @@ _DEFAULT_MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
 # Similarity thresholds
 _HIGH_SIMILARITY = 0.75
 _MEDIUM_SIMILARITY = 0.60
+
+# Persisted FAISS index cache. Re-embedding the whole attack corpus on every
+# engine construction is the dominant cold-start cost (~tens of seconds). When
+# the attack DB and the embedding model are unchanged, we load a prebuilt index
+# from disk and skip the encode entirely. Caching is best-effort: any failure
+# silently falls back to rebuilding, so it can never break setup.
+_CACHE_DIR = Path.home() / ".prompt-armor" / "cache"
+_INDEX_CACHE_PATH = _CACHE_DIR / "l3_faiss_index.bin"
+_INDEX_META_PATH = _CACHE_DIR / "l3_index_meta.json"
+# Bump when index-build logic changes (filter, dim, normalization) to invalidate
+# any stale on-disk caches.
+_INDEX_CACHE_VERSION = "1"
+
+
+def _index_cache_sig(attacks_path: Path, model_path: Path) -> str | None:
+    """Signature over (attack DB content + model identity + build version).
+
+    Returns None if inputs can't be read, in which case caching is skipped.
+    """
+    try:
+        h = hashlib.sha256()
+        h.update(_INDEX_CACHE_VERSION.encode())
+        with open(attacks_path, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+        st = model_path.stat()
+        h.update(f"{st.st_size}:{st.st_mtime_ns}".encode())
+        return h.hexdigest()[:24]
+    except OSError:
+        return None
+
+
+def _load_index_cache(sig: str) -> tuple[Any, list[dict[str, str]]] | None:
+    """Load a persisted index iff its signature matches. Best-effort."""
+    try:
+        if not _INDEX_CACHE_PATH.exists() or not _INDEX_META_PATH.exists():
+            return None
+        meta = json.loads(_INDEX_META_PATH.read_text())
+        if meta.get("sig") != sig:
+            return None
+        import faiss
+
+        index = faiss.read_index(str(_INDEX_CACHE_PATH))
+        return index, meta["attack_metadata"]
+    except Exception as e:  # corrupt cache / version skew -> rebuild
+        logger.warning("L3: ignoring unreadable index cache: %s", e)
+        return None
+
+
+def _save_index_cache(sig: str, index: Any, attack_metadata: list[dict[str, str]]) -> None:
+    """Persist the index + metadata atomically. Best-effort (never raises)."""
+    try:
+        import faiss
+
+        _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        tmp_index = _INDEX_CACHE_PATH.parent / (_INDEX_CACHE_PATH.name + ".tmp")
+        tmp_meta = _INDEX_META_PATH.parent / (_INDEX_META_PATH.name + ".tmp")
+        faiss.write_index(index, str(tmp_index))
+        tmp_meta.write_text(json.dumps({"sig": sig, "attack_metadata": attack_metadata}))
+        tmp_index.replace(_INDEX_CACHE_PATH)
+        tmp_meta.replace(_INDEX_META_PATH)
+    except Exception as e:
+        logger.warning("L3: could not write index cache: %s", e)
 
 
 class L3SimilarityLayer(BaseLayer):
@@ -156,6 +220,23 @@ class L3SimilarityLayer(BaseLayer):
 
         # Load attack database
         attacks_path = self._config.attacks_path or _DEFAULT_ATTACKS_PATH
+
+        # Fast path: load a persisted index to skip re-encoding the corpus (the
+        # dominant cold-start cost). ONNX path only; the signature pins both the
+        # attack DB content and the model file.
+        cache_sig: str | None = None
+        if self._use_onnx:
+            cache_sig = _index_cache_sig(attacks_path, onnx_model)
+            if cache_sig is not None:
+                cached = _load_index_cache(cache_sig)
+                if cached is not None:
+                    self._index, self._attack_metadata = cached
+                    logger.info(
+                        "L3: loaded cached FAISS index (%d vectors) — skipped corpus encode",
+                        self._index.ntotal,
+                    )
+                    return
+
         texts: list[str] = []
         self._attack_metadata = []
 
@@ -199,6 +280,10 @@ class L3SimilarityLayer(BaseLayer):
         else:
             self._index = faiss.IndexFlatIP(dim)
             self._index.add(embeddings)
+
+        # Persist the built index so the next cold start skips the encode.
+        if cache_sig is not None:
+            _save_index_cache(cache_sig, self._index, self._attack_metadata)
 
     def analyze(self, text: str) -> LayerResult:
         """Compare prompt against known attacks via cosine similarity."""
