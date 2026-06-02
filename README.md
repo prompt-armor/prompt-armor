@@ -237,23 +237,26 @@ thresholds:
 python tests/benchmark/run_benchmark.py
 ```
 
-**External evaluation** ([jayavibhav/prompt-injection](https://huggingface.co/datasets/jayavibhav/prompt-injection), 1K real-world samples) — v0.8.0:
+We report **two numbers** — the harder internal benchmark and the same-distribution external one — so the weaker figure is never hidden.
+
+**Internal benchmark** (1,534 samples — 969 benign + 565 malicious; harder, edge-case-heavy):
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| **Precision** | **98.4%** | Only 5 false positives out of 692 benign |
-| **Recall** | 99.4% | Only 2 out of 308 attacks pass |
-| **F1 Score** | **98.87%** | |
+| **F1 Score** | **86.9%** | Canonical headline metric |
+| **Precision** | 94.6% | 26 false positives |
+| **Recall** | 80.4% | ~1 in 5 attacks miss (model is precision-leaning) |
+| **Avg Latency** | ~24ms | Warm. First call adds a one-time model load + FAISS index build, cached after the first run |
 
-**Internal benchmark** (515 samples — 353 benign + 162 malicious):
+> Honesty note: fusion thresholds/coefficients are currently tuned on this benchmark (no holdout), so 86.9% is an in-sample number. A leakage guard (`tests/test_no_leakage.py`) confirms benchmark↔attack-DB overlap stays low (~1.9%); a held-out out-of-sample number is tracked as future work.
+
+**External evaluation** ([jayavibhav/prompt-injection](https://huggingface.co/datasets/jayavibhav/prompt-injection), 1K real-world samples):
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| **Accuracy** | 94.2% | Full dataset (515 samples) |
-| **Precision** | 95.8% | Only 6 false positives |
-| **Recall** | 85.2% | 24 edge-case attacks miss (model is specific to v2 anchor pool) |
-| **F1 Score** | 90.2% | |
-| **Avg Latency** | ~21ms | 5 layers in parallel, ONNX L3 |
+| **F1 Score** | **98.87%** | In-distribution: the internal benchmark and L3 training also draw from this dataset's train split, so treat as an upper bound, not generalization |
+| **Precision** | 98.4% | 5 false positives out of 692 benign |
+| **Recall** | 99.4% | 2 of 308 attacks pass |
 
 Attack DB v2: 1,509 high-specificity curated entries (from 25,160 raw). L3 contrastive fine-tuned with 2,368 mined hard negatives — attacks and benigns now embed in opposite directions (cross-similarity -0.063). 5 layers + optional Council (LLM judge). Multilingual detection covers EN, DE, ES, FR, PT. Dataset is public in `tests/benchmark/dataset/`.
 
@@ -419,11 +422,11 @@ prompt-armor/
 
 - [x] **v0.1** — Lite engine with 4 layers, CLI, MCP server, benchmark
 - [x] **v0.3** — Paradigm Shift: contrastive L3, 5.5K attack DB, inflammation cascade
-- [x] **v0.4** — Attack DB 25K, FAISS IVF, F1 91%
+- [x] **v0.4** — Attack DB 25K, FAISS IVF
 - [x] **v0.5** — Council mode (LLM judge), L5 anomaly detection, analytics dashboard
-- [x] **v0.6** — L3 ONNX (no PyTorch), adversarial test suite, F1 91.7%
-- [x] **v0.7** — L3 FP reduction (precision +6.8%), corroborated hard block, L5 recalibration, F1 94.0%
-- [x] **v0.8** — L3 contrastive retrain with 2.4K hard negatives, unicode hardening, attack DB curation. **F1 external 98.87%** (precision 98.4%, FPs -91%)
+- [x] **v0.6** — L3 ONNX (no PyTorch), adversarial test suite
+- [x] **v0.7** — L3 FP reduction (precision +6.8%), corroborated hard block, L5 recalibration
+- [x] **v0.8** — L3 contrastive retrain with 2.4K hard negatives, unicode hardening, attack DB curation
 - [ ] **v1.0** — Production-ready with <0.1% FPR target, multi-judge council (OpenRouter)
 - [ ] **Cloud** — Managed API, dashboard, threat intel feed, continuously updated models
 

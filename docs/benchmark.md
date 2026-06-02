@@ -32,10 +32,10 @@ Dataset: 969 benign + 565 malicious (1,534 total) from deepset/prompt-injections
 | Precision | 94.6% |
 | Recall | 80.4% |
 | F1 Score | **86.9%** |
-| Avg Latency | ~20ms |
+| Avg Latency | ~24ms (warm) |
 | FP / FN | 26 / 111 |
 
-> Note: v2 benchmark is 3× larger and includes adversarial + production-like distributions. The external eval (jayavibhav 1K, F1 98.87%) remains the primary real-world indicator. The 111 FN are edge-case attacks being analyzed for v0.9.
+> **How to read these two numbers.** The **internal 86.9%** is the harder, canonical figure — but it is *in-sample*: fusion thresholds/coefficients are currently tuned directly on this benchmark (no holdout), and L3's benign discrimination is trained on this set's benigns. The **external 98.87%** is *in-distribution*, not generalization: the internal benchmark and L3 training draw from jayavibhav's train split, so it should be read as an upper bound. Benchmark↔attack-DB overlap is low (~1.9%, guarded by `tests/test_no_leakage.py`). A held-out, out-of-distribution number is tracked for v0.9. The 111 FN are edge-case attacks under analysis.
 
 ## Methodology
 
