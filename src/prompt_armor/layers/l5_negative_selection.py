@@ -27,12 +27,33 @@ logger = logging.getLogger("prompt_armor")
 
 _MODEL_PATH = Path(__file__).parent.parent / "data" / "models" / "l5_negative_selection.pkl"
 
-_INJECTION_KEYWORDS = frozenset({
-    "ignore", "forget", "disregard", "override", "bypass", "skip",
-    "instructions", "prompt", "system", "previous", "above", "rules",
-    "pretend", "roleplay", "jailbreak", "dan", "unrestricted",
-    "decode", "base64", "translate", "morse", "hex", "binary",
-})
+_INJECTION_KEYWORDS = frozenset(
+    {
+        "ignore",
+        "forget",
+        "disregard",
+        "override",
+        "bypass",
+        "skip",
+        "instructions",
+        "prompt",
+        "system",
+        "previous",
+        "above",
+        "rules",
+        "pretend",
+        "roleplay",
+        "jailbreak",
+        "dan",
+        "unrestricted",
+        "decode",
+        "base64",
+        "translate",
+        "morse",
+        "hex",
+        "binary",
+    }
+)
 
 _DELIMITER_PATTERNS = re.compile(
     r"(\[system\]|\[inst\]|<\|im_start\|>|<\|im_end\|>|### ?system|### ?instruction|```system)",
