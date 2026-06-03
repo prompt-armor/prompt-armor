@@ -34,6 +34,11 @@ _CATEGORY_MAP: dict[str, Category | None] = {**CATEGORY_MAP, "benign": None}
 _V1_ATTACKS_PATH = Path(__file__).parent.parent / "data" / "attacks" / "known_attacks.jsonl"
 _V2_ATTACKS_PATH = Path(__file__).parent.parent / "data" / "attacks" / "known_attacks_v2.jsonl"
 _DEFAULT_ATTACKS_PATH = _V2_ATTACKS_PATH if _V2_ATTACKS_PATH.exists() else _V1_ATTACKS_PATH
+# Curated benign exemplars that are injection-SHAPED but benign-intent (mostly
+# multilingual: "ignore os erros de digitação"). L3 raw-matches these to attacks;
+# we down-weight an input that is at least as similar to one of these as to any
+# attack — see the benign-margin gate in analyze().
+_BENIGN_EXEMPLARS_PATH = Path(__file__).parent.parent / "data" / "attacks" / "benign_exemplars.jsonl"
 _ONNX_MODEL_PATH = Path(__file__).parent.parent / "data" / "models" / "l3-contrastive-onnx"
 _CONTRASTIVE_MODEL_PATH = Path(__file__).parent.parent / "data" / "models" / "l3-contrastive"
 _DEFAULT_MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
@@ -135,6 +140,7 @@ class L3SimilarityLayer(BaseLayer):
         self._st_model: Any = None  # SentenceTransformer fallback
         self._index: Any = None
         self._attack_metadata: list[dict[str, str]] = []
+        self._benign_index: Any = None  # curated benign exemplars (margin gate)
         self._use_onnx = False
 
     def _mean_pool(self, token_embeddings: np.ndarray, attention_mask: np.ndarray) -> np.ndarray:
@@ -240,6 +246,10 @@ class L3SimilarityLayer(BaseLayer):
         # Load attack database
         attacks_path = self._config.attacks_path or _DEFAULT_ATTACKS_PATH
 
+        # Build the small benign-exemplar index now — the attack-index cache
+        # fast-paths below can `return` early, and this must run on every path.
+        self._build_benign_index(faiss)
+
         # Fast path: load a persisted index to skip re-encoding the corpus (the
         # dominant cold-start cost). ONNX path only. Prefer the bundled index
         # shipped in the wheel, then the user cache.
@@ -309,6 +319,33 @@ class L3SimilarityLayer(BaseLayer):
         if cache_sig is not None:
             _save_user_cache(cache_sig, self._index, self._attack_metadata)
 
+    def _build_benign_index(self, faiss: Any) -> None:
+        """Build a small FAISS index of curated benign exemplars for the margin gate.
+
+        These are injection-shaped but benign-intent phrases (mostly multilingual)
+        that the contrastive model raw-matches to attacks. At analyze time, an
+        input that is at least as similar to one of these as to any attack is
+        treated as benign — fixing the FP without lowering scores on real attacks
+        (which are not similar to the exemplars).
+        """
+        if not _BENIGN_EXEMPLARS_PATH.exists():
+            return
+        texts: list[str] = []
+        with open(_BENIGN_EXEMPLARS_PATH) as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    texts.append(json.loads(line)["text"])
+        if not texts:
+            return
+        if self._use_onnx:
+            emb = self._encode_onnx(texts)
+        else:
+            emb = self._st_model.encode(texts, convert_to_numpy=True, normalize_embeddings=True)
+        emb = np.asarray(emb, dtype=np.float32)
+        self._benign_index = faiss.IndexFlatIP(emb.shape[1])
+        self._benign_index.add(emb)
+
     def analyze(self, text: str) -> LayerResult:
         """Compare prompt against known attacks via cosine similarity."""
         start = time.perf_counter()
@@ -333,10 +370,29 @@ class L3SimilarityLayer(BaseLayer):
         scores, indices = self._index.search(embedding, k)
 
         top_similarity = float(scores[0][0])
+
+        # Benign-margin gate: if the input is at least as similar to a curated
+        # benign exemplar as to any attack, it is an injection-shaped-but-benign
+        # phrase (e.g. "ignore os erros de digitação") — suppress the score, and
+        # skip the (misleading) attack evidence. Real attacks are not close to the
+        # exemplars, so their score and evidence are untouched (recall preserved).
+        suppressed = False
+        if self._benign_index is not None and self._benign_index.ntotal > 0:
+            benign_scores, _ = self._benign_index.search(embedding, 1)
+            top_benign_sim = float(benign_scores[0][0])
+            # Strict: only suppress an input that is a near-duplicate of a curated
+            # benign exemplar AND is at least as benign-like as attack-like. Real
+            # attacks are not near-duplicates of the exemplars, so they pass.
+            if top_benign_sim >= 0.92 and top_benign_sim >= top_similarity:
+                top_similarity = 0.0
+                suppressed = True
+
         evidence: list[Evidence] = []
         categories_seen: set[Category] = set()
 
         for i in range(k):
+            if suppressed:
+                break
             sim = float(scores[0][i])
             idx = int(indices[0][i])
             if sim < _MEDIUM_SIMILARITY:
