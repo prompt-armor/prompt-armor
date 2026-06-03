@@ -4,6 +4,14 @@ All notable changes to prompt-armor will be documented in this file.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-06-02
+
+Security, performance, and credibility release. Two CVE-class fixes (ReDoS DoS,
+pickle RCE), ~35× cold-start reduction with a wheel-bundled index, per-session
+isolation with deterministic decisions, four false-positive classes fixed, and
+an honest-metrics pass (canonical F1 **84.4%** internal / **98.87%** external).
+No breaking API changes; `analyze(text, session_id=...)` is additive.
+
 ### Security
 - **Fixed ReDoS (catastrophic backtracking) in L1 rules DE-001 and IB-001.** `DE-001`'s `\S+@\S+\.\S+` email matcher backtracked exponentially (a crafted ~16KB input pinned a CPU core for minutes); `IB-001`'s unbounded `\s*` runs backtracked polynomially (~590ms on a whitespace flood). Both are now linear (bounded, non-overlapping character classes). Detection of real exfiltration / delimiter-injection attacks is unchanged. This closed an unauthenticated CPU-exhaustion DoS for any service calling `analyze()` on user input.
 - **L1 now matches under a hard per-search timeout** via the `regex` module (a backtracking-resistant superset of stdlib `re`). The engine's per-layer `ThreadPoolExecutor` timeout cannot preempt a GIL-holding `re` backtrack — `regex`'s `timeout=` can. A rule exceeding the budget is skipped (fail-open at the rule level), so a future ReDoS in a contributed rule can no longer hang a worker thread.
