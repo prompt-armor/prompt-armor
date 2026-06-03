@@ -1,6 +1,6 @@
 # Prompt Armor — OpenClaw Plugin
 
-Prompt injection detection for OpenClaw agents. Scans every incoming message using 4 parallel analysis layers before the agent processes it.
+Prompt injection detection for OpenClaw agents. Scans every incoming message using 5 parallel analysis layers before the agent processes it.
 
 ## Install
 
@@ -64,8 +64,8 @@ In your OpenClaw settings:
 
 ## Performance
 
-- Latency: ~27ms per scan
-- F1 Score: 93% (held-out test set)
+- Latency: ~24ms per scan (warm)
+- F1 Score: 84.4% internal (1,534-sample) / 98.87% external (jayavibhav)
 - Runs fully offline — no API calls during analysis
 - Fail-open: if `prompt-armor` is not installed, messages pass through
 

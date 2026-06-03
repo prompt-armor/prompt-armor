@@ -2,6 +2,42 @@
 
 All notable changes to prompt-armor will be documented in this file.
 
+## [Unreleased]
+
+## [0.9.0] - 2026-06-02
+
+Security, performance, and credibility release. Two CVE-class fixes (ReDoS DoS,
+pickle RCE), ~35× cold-start reduction with a wheel-bundled index, per-session
+isolation with deterministic decisions, four false-positive classes fixed, and
+an honest-metrics pass (canonical F1 **84.4%** internal / **98.87%** external).
+No breaking API changes; `analyze(text, session_id=...)` is additive.
+
+### Security
+- **Fixed ReDoS (catastrophic backtracking) in L1 rules DE-001 and IB-001.** `DE-001`'s `\S+@\S+\.\S+` email matcher backtracked exponentially (a crafted ~16KB input pinned a CPU core for minutes); `IB-001`'s unbounded `\s*` runs backtracked polynomially (~590ms on a whitespace flood). Both are now linear (bounded, non-overlapping character classes). Detection of real exfiltration / delimiter-injection attacks is unchanged. This closed an unauthenticated CPU-exhaustion DoS for any service calling `analyze()` on user input.
+- **L1 now matches under a hard per-search timeout** via the `regex` module (a backtracking-resistant superset of stdlib `re`). The engine's per-layer `ThreadPoolExecutor` timeout cannot preempt a GIL-holding `re` backtrack — `regex`'s `timeout=` can. A rule exceeding the budget is skipped (fail-open at the rule level), so a future ReDoS in a contributed rule can no longer hang a worker thread.
+- **Pinned model revisions + sha256 verification for auto-downloaded artifacts.** L5 `joblib.load`ed an *unpinned, unverified* pickle from HuggingFace — a remote-code-execution vector on first run if the repo or account were compromised. L5 now pins the HF revision **and** verifies the file's sha256 before deserializing; L3's ONNX download is revision-pinned to match L2 (which was already pinned).
+- **Per-request isolation + deterministic decisions.** The inflammation cascade (session threat-awareness) lived on the long-lived / singleton engine, so one caller's WARN/BLOCK history raised sensitivity for *unrelated* callers — a cross-tenant state leak. It is now keyed by an explicit `session_id` (stateless by default, LRU-bounded), so state never crosses sessions; `analyze(text, session_id=...)` and the MCP tool accept it. Separately, the decision-threshold jitter is now **off by default** (deterministic, reproducible, auditable decisions) and, when enabled via `thresholds.jitter_sigma`, only lowers the threshold (more blocking) — the old symmetric jitter let a malicious 0.51 ALLOW ~37% of the time, and made the adversarial suite flip run-to-run. **This also corrected the internal benchmark from an inflated 86.9% to the honest single-shot 84.4%**: the leak had let inflammation accumulate across the benchmark run, boosting later prompts. All docs updated to 84.4%.
+
+### Fixed
+- **Benign false positives at the rule / L4 level** (no detection-quality regression — within benchmark noise; all real EN/PT/ES/FR attack probes still BLOCK at 1.000):
+  - A benign programming question (`how do I override the default behavior of __init__…`) no longer hard-BLOCKs at risk 1.000 — `override` is a normal programming verb and was wrongly double-counted as a **privilege-escalation** keyword (it stays an imperative verb, so `override your instructions` is still caught).
+  - L4 no longer flags accented Latin text (ç, ã, é, ñ, ü, …) as an **encoding trick** (was scoring every DE/ES/FR/PT input 0.6). Mixed-script detection now uses a real Latin-vs-other-script check, so legitimate multilingual text passes while Cyrillic/CJK smuggling is still caught.
+  - The multilingual L1 rules (`ML-PT-001`/`ML-ES-001`/`ML-FR-001`) now require a real attack noun, so benign phrases like `ignore os erros de digitação` / `ignora los errores` no longer match the regex (they previously matched on the bare verb + article).
+- **Multilingual benign FP fully fixed (L3 benign-margin).** Injection-shaped but benign foreign text (`ignore os erros de digitação no texto acima`, `olvida tus problemas`, `ignore les erreurs de frappe`) used to hard-BLOCK at risk 1.000 because L2+L3 semantically match it to attacks. L3 now ships ~80 curated benign exemplars (`data/attacks/benign_exemplars.jsonl`) and suppresses an input that is a near-duplicate of one (cosine ≥ 0.92) **and** at least as benign-like as attack-like — so those phrases now ALLOW while real attacks (not near-duplicates of the exemplars) are untouched. **Zero detection cost: the 1,534-sample benchmark is byte-identical (F1 84.4% / P 94.5% / R 76.3%).** No retraining or model change required.
+
+### Changed
+- **Reconciled all published F1/latency metrics to one canonical, honestly-labeled framing** across README, docs, `CLAUDE.md`, and the OpenClaw integration. The headline was inconsistent (F1 quoted as anything from 86.9% to 98.87% across 8+ surfaces; latency 20/21/24/27ms). Now everywhere: **F1 84.4% internal (1,534-sample, single-shot) / 98.87% external (jayavibhav 1K, in-distribution — upper bound, not generalization)**, latency **~24ms warm**. Both numbers are always shown, with the in-sample/in-distribution caveats stated. `tests/test_metrics_consistency.py` fails CI if a non-canonical F1 or a stale headline latency reappears in a live surface.
+
+### Added
+- `tests/unit/test_redos.py` — per-rule ReDoS time-budget guard across every rule + fuzzy pattern (regression test for DE-001/IB-001 and a gate for future contributed rules).
+- `tests/unit/test_model_integrity.py` — verifies the L5 pickle integrity gate rejects a tampered artifact and that L3/L5 pin their model revisions.
+- `regex>=2023.0` is now a core runtime dependency (drives the L1 matching engine + timeout).
+- **Benchmark leakage audit + CI guard** (`scripts/audit_leakage.py`, `tests/test_no_leakage.py`). Quantifies benchmark↔attack-DB overlap with whitespace/markdown-normalized + token-Jaccard matching (not just SHA-exact). Finding: overlap with the v2 index L3 actually uses is low (~1.6% normalized-exact, ~1.9% near-dup); the guard fails CI if a future dataset/DB refresh reintroduces near-duplicates above 5%.
+
+### Performance
+- **L3 cold start cut ~35× by persisting the FAISS index.** L3 used to re-embed the entire attack corpus and rebuild the index on *every* engine construction (the dominant cold-start cost — paid on every CLI call, `docker run`, and per-message in the OpenClaw plugin). The built index is now cached to `~/.prompt-armor/cache/`, keyed by a signature over the attack-DB content + embedding-model file, and loaded on subsequent starts. Measured: L3 setup **13.8s → 0.4s** with byte-identical detection. Caching is best-effort — any read/write failure silently falls back to rebuilding, and a changed attack DB or model invalidates the cache automatically.
+- **Prebuilt FAISS index now ships in the wheel** (`src/prompt_armor/data/index/`, ~2.2 MB) so even the **first** `pip install` / `docker run` is fast — no corpus encode at all. The cache signature is now cross-machine-stable (keyed on the attack-DB content + the pinned model revision rather than file mtime), so the committed index matches any install; L3 loads bundled → user cache → rebuild, in that order. Regenerate with `python scripts/build_l3_index.py` when the v2 DB or L3 model revision changes (a CI test fails if the shipped index goes stale). The Docker image already warms the engine at build time, so `docker run` stays at warm latency.
+
 ## [0.8.1] - 2026-04-17
 
 Robustness patch — expanded benchmarks and defensive L5 corroboration. No model changes; v0.8.0 API and HuggingFace artifacts unchanged.

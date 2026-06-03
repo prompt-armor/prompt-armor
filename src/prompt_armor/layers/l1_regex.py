@@ -6,20 +6,50 @@ Pure Python, no ML dependencies, sub-millisecond latency.
 
 from __future__ import annotations
 
-import re
+import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
+# We deliberately use the third-party `regex` module (a drop-in superset of the
+# stdlib `re`) instead of `re`, for two security properties:
+#   1. A more backtracking-resistant matching engine.
+#   2. A per-search `timeout=` that PREEMPTS catastrophic backtracking. The
+#      stdlib `re` holds the GIL during backtracking and cannot be interrupted,
+#      so the engine's ThreadPoolExecutor per-layer timeout does NOT protect
+#      against a ReDoS in a rule. `regex`'s timeout does.
+# All matching on untrusted input MUST go through `_safe_search`.
+import regex as re
 import yaml
 
 from prompt_armor.config import ShieldConfig
 from prompt_armor.layers.base import BaseLayer
 from prompt_armor.models import CATEGORY_MAP, Category, Evidence, LayerResult
 
+logger = logging.getLogger("prompt_armor")
+
 _CATEGORY_MAP = CATEGORY_MAP
 
 _DEFAULT_RULES_PATH = Path(__file__).parent.parent / "data" / "rules" / "default_rules.yml"
+
+# Hard per-search wall-clock budget (seconds). A healthy rule matches a 50KB
+# input in well under 1ms; this only ever fires on adversarial/ReDoS input, in
+# which case the rule is skipped (fail-open at the rule level).
+_REGEX_TIMEOUT_S = 0.1
+
+
+def _safe_search(pattern: re.Pattern[str], text: str) -> re.Match[str] | None:
+    """Run ``pattern.search`` under a wall-clock timeout that preempts ReDoS.
+
+    Returns ``None`` (treated as no match) if the search exceeds the budget,
+    rather than hanging a worker thread on catastrophic backtracking.
+    """
+    try:
+        return pattern.search(text, timeout=_REGEX_TIMEOUT_S)
+    except TimeoutError:
+        logger.warning("L1: regex search exceeded %ss budget; skipping rule", _REGEX_TIMEOUT_S)
+        return None
+
 
 # Pre-compiled fiction/educational context patterns
 _FICTION_PATTERNS = [
@@ -41,15 +71,15 @@ _FUZZY_KEYWORDS = [
         re.compile(
             # "ignore" variants: transpositions, letter drops, leetspeak
             r"\b(?:"
-            r"i[gq]m(?:re|r[oe]|ore|er)|"     # igmre, igmor, igmrer
-            r"ignroe|ignr[oe]|ignre|"          # ignroe, ignro, ignre
-            r"i[gq]n[o0]r[e3]|"                # ignore, 1gn0r3
-            r"1gn[o0]re|"                      # 1gn0re
+            r"i[gq]m(?:re|r[oe]|ore|er)|"  # igmre, igmor, igmrer
+            r"ignroe|ignr[oe]|ignre|"  # ignroe, ignro, ignre
+            r"i[gq]n[o0]r[e3]|"  # ignore, 1gn0r3
+            r"1gn[o0]re|"  # 1gn0re
             # "disregard" variants (accept 4 for 'a' leetspeak)
-            r"d[i1]sr[e3]g[a@4]rd|"            # d1sreg4rd
-            r"dsregard|disregrd|"              # letter drops
+            r"d[i1]sr[e3]g[a@4]rd|"  # d1sreg4rd
+            r"dsregard|disregrd|"  # letter drops
             # "forget" variants
-            r"f[o0]rg[e3]t|fo?rgt"             # f0rg3t, frgt
+            r"f[o0]rg[e3]t|fo?rgt"  # f0rg3t, frgt
             r")\s+(all|the|these|my|your|previous|prior|above|what|everything|what\s+i)\b",
             re.IGNORECASE,
         ),
@@ -100,14 +130,14 @@ class L1RegexLayer(BaseLayer):
 
         matches: list[tuple[RegexRule, re.Match[str]]] = []
         for rule in self._rules:
-            match = rule.pattern.search(text)
+            match = _safe_search(rule.pattern, text)
             if match:
                 matches.append((rule, match))
 
         # Fuzzy keyword matching for typo/leetspeak evasion.
         # Synthesizes RegexRule instances on the fly — lower weight than curated rules.
         for pattern, category_name, weight, description in _FUZZY_KEYWORDS:
-            match = pattern.search(text)
+            match = _safe_search(pattern, text)
             if match:
                 cat = _CATEGORY_MAP.get(category_name)
                 if cat is None:
@@ -221,7 +251,7 @@ def _apply_context_modifiers(
 
     # Fictional/educational context modifiers (only for moderate scores)
     for pat in _FICTION_PATTERNS:
-        if pat.search(text):
+        if _safe_search(pat, text):
             score *= 0.85
             break
 

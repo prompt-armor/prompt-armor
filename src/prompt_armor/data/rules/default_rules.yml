@@ -201,7 +201,7 @@ rules:
 
   # === DATA EXFILTRATION ===
   - id: "DE-001"
-    pattern: "(send|forward|email|transmit|post|upload|transfer)\\s+.{0,40}(to\\s+)?(https?://|\\S+@\\S+\\.\\S+)"
+    pattern: "(send|forward|email|transmit|post|upload|transfer)\\s+.{0,40}(to\\s+)?(https?://|[^\\s@]{1,64}@[^\\s@]{1,255}\\.[^\\s]{2,24})"
     category: "data_exfiltration"
     weight: 0.82
     description: "Send data to external URL/email"
@@ -239,7 +239,7 @@ rules:
 
   # === INSTRUCTION BYPASS ===
   - id: "IB-001"
-    pattern: "(\\[|\\{|<)\\s*/?\\s*(system|SYSTEM|instructions?|INST|\\|im_start\\|)\\s*(\\]|\\}|>)"
+    pattern: "(\\[|\\{|<)\\s{0,8}/?\\s{0,8}(system|SYSTEM|instructions?|INST|\\|im_start\\|)\\s{0,8}(\\]|\\}|>)"
     category: "instruction_bypass"
     weight: 0.88
     description: "Delimiter injection (system/INST tags)"
@@ -326,7 +326,7 @@ rules:
 
   # === MULTILINGUAL — Spanish (ES) ===
   - id: "ML-ES-001"
-    pattern: "(olvida|ignora|desecha|descarta)\\s+(todo|todas?|los?|las?)\\s*(anterior|previo|instrucciones?)?"
+    pattern: "(olvida|ignora|desecha|descarta)\\s+((todo|todas?|los?|las?|tus?|sus?|mis?)\\s+){0,5}(instrucci(ón|ones)|reglas?|órdenes?|orden|mensajes?|directrices?|anterior(es)?|previo?s?)"
     category: "prompt_injection"
     weight: 0.88
     description: "ES: Forget/ignore all previous"
@@ -351,7 +351,7 @@ rules:
 
   # === MULTILINGUAL — French (FR) ===
   - id: "ML-FR-001"
-    pattern: "(oublie[zs]?|ignore[zs]?|ne\\s+tien[s]?\\s+pas\\s+compte)\\s+(de\\s+)?(tout|toutes?|les?)\\s*(instructions?|consignes?|précédent)?"
+    pattern: "(oublie[zs]?|ignore[zs]?|ne\\s+tien[s]?\\s+pas\\s+compte)\\s+(de\\s+)?((tout|toutes?|les?|tes|mes|vos)\\s+){0,5}(instructions?|consignes?|règles?|ordres?|directives?|messages?|précédent(e|es|s)?)"
     category: "prompt_injection"
     weight: 0.88
     description: "FR: Forget/ignore all previous"
@@ -376,7 +376,7 @@ rules:
 
   # === MULTILINGUAL — Portuguese (PT) ===
   - id: "ML-PT-001"
-    pattern: "(esqueça|ignore|descarte|desconsidere)\\s+(tudo|todas?|os?|as?)\\s*(anterior|prévi[oa]|instruções?)?"
+    pattern: "(esqueça|ignore|descarte|desconsidere)\\s+((tudo|todas?|os?|as?|seus?|suas?|minhas?|meus?)\\s+){0,5}(instruç(ão|ões)|regras?|comandos?|mensage(m|ns)|diretrizes?|orientações?|anterior(es)?|prévi[oa]s?)"
     category: "prompt_injection"
     weight: 0.88
     description: "PT: Forget/ignore all previous"

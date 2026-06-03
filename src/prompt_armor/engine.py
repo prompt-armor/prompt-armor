@@ -13,6 +13,7 @@ import threading
 import time
 import unicodedata
 import weakref
+from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import Any
@@ -91,22 +92,78 @@ _INVISIBLE_CHARS = re.compile(
 # Homoglyph fold: map common Cyrillic/Greek/fullwidth lookalikes to ASCII Latin.
 # Keeps detection focused on intent, not on which script was used to write it.
 # Applied AFTER NFKC so fullwidth variants are normalized first.
-_HOMOGLYPH_MAP = str.maketrans({
-    # Cyrillic → Latin (lowercase)
-    "а": "a", "в": "b", "е": "e", "ё": "e", "з": "z", "и": "i", "і": "i",
-    "й": "i", "к": "k", "м": "m", "н": "h", "о": "o", "р": "p", "с": "c",
-    "т": "t", "у": "y", "х": "x", "ѕ": "s", "ј": "j", "ԛ": "q", "ԝ": "w",
-    # Cyrillic → Latin (uppercase)
-    "А": "A", "В": "B", "Е": "E", "Ё": "E", "З": "Z", "И": "I", "І": "I",
-    "К": "K", "М": "M", "Н": "H", "О": "O", "Р": "P", "С": "C", "Т": "T",
-    "У": "Y", "Х": "X", "Ѕ": "S", "Ј": "J", "Ԛ": "Q", "Ԝ": "W",
-    # Greek → Latin
-    "α": "a", "ο": "o", "ρ": "p", "ν": "v", "ε": "e", "τ": "t", "κ": "k",
-    "ι": "i", "μ": "m", "η": "n",
-    "Α": "A", "Β": "B", "Ε": "E", "Ζ": "Z", "Η": "H", "Ι": "I",
-    "Κ": "K", "Μ": "M", "Ν": "N", "Ο": "O", "Ρ": "P", "Τ": "T",
-    "Υ": "Y", "Χ": "X",
-})
+_HOMOGLYPH_MAP = str.maketrans(
+    {
+        # Cyrillic → Latin (lowercase)
+        "а": "a",
+        "в": "b",
+        "е": "e",
+        "ё": "e",
+        "з": "z",
+        "и": "i",
+        "і": "i",
+        "й": "i",
+        "к": "k",
+        "м": "m",
+        "н": "h",
+        "о": "o",
+        "р": "p",
+        "с": "c",
+        "т": "t",
+        "у": "y",
+        "х": "x",
+        "ѕ": "s",
+        "ј": "j",
+        "ԛ": "q",
+        "ԝ": "w",
+        # Cyrillic → Latin (uppercase)
+        "А": "A",
+        "В": "B",
+        "Е": "E",
+        "Ё": "E",
+        "З": "Z",
+        "И": "I",
+        "І": "I",
+        "К": "K",
+        "М": "M",
+        "Н": "H",
+        "О": "O",
+        "Р": "P",
+        "С": "C",
+        "Т": "T",
+        "У": "Y",
+        "Х": "X",
+        "Ѕ": "S",
+        "Ј": "J",
+        "Ԛ": "Q",
+        "Ԝ": "W",
+        # Greek → Latin
+        "α": "a",
+        "ο": "o",
+        "ρ": "p",
+        "ν": "v",
+        "ε": "e",
+        "τ": "t",
+        "κ": "k",
+        "ι": "i",
+        "μ": "m",
+        "η": "n",
+        "Α": "A",
+        "Β": "B",
+        "Ε": "E",
+        "Ζ": "Z",
+        "Η": "H",
+        "Ι": "I",
+        "Κ": "K",
+        "Μ": "M",
+        "Ν": "N",
+        "Ο": "O",
+        "Ρ": "P",
+        "Τ": "T",
+        "Υ": "Y",
+        "Χ": "X",
+    }
+)
 
 
 def _normalize_text(text: str) -> str:
@@ -168,6 +225,7 @@ class LiteEngine:
     _INFLAMMATION_BOOST = 0.25  # threshold reduction per WARN
     _INFLAMMATION_DECAY = 0.7  # exponential decay per request
     _MAX_INFLAMMATION = 0.15  # max threshold reduction
+    _MAX_SESSIONS = 10_000  # bounded LRU of per-session inflammation state
 
     # Class-level tracking to prevent atexit handler accumulation
     _active_engines: weakref.WeakSet[LiteEngine] = weakref.WeakSet()
@@ -177,7 +235,11 @@ class LiteEngine:
         self._config = config or load_config()
         self._layers = _build_layers(self._config)
         self._pool = ThreadPoolExecutor(max_workers=max(len(self._layers), 1))
-        self._inflammation: float = 0.0  # session-level threat awareness
+        # Per-session threat awareness (inflammation cascade), keyed by an
+        # explicit session_id. The long-lived / singleton engine therefore never
+        # leaks inflammation across unrelated callers; a bounded LRU caps memory.
+        # No session_id => stateless (no inflammation), which is the safe default.
+        self._inflammation: OrderedDict[str, float] = OrderedDict()
         self._inflammation_lock = threading.Lock()  # thread-safe inflammation
         self._council: Any = None  # Lazy-initialized when council.enabled
 
@@ -237,11 +299,14 @@ class LiteEngine:
         if self._collector is not None:
             self._collector.record(text, result)
 
-    def analyze(self, text: str) -> ShieldResult:
+    def analyze(self, text: str, session_id: str | None = None) -> ShieldResult:
         """Run all layers in parallel and fuse results.
 
-        Applies inflammation cascade: previous WARN/BLOCK decisions
-        temporarily increase sensitivity for subsequent requests.
+        Stateless by default. Pass a stable ``session_id`` (e.g. per user /
+        connection) to enable the inflammation cascade — previous WARN/BLOCK
+        decisions in *that* session temporarily raise sensitivity for subsequent
+        requests, catching iterative probing. State is isolated per session, so
+        a shared engine never leaks one caller's history into another's.
         """
         if not isinstance(text, str):
             raise TypeError(f"Expected str, got {type(text).__name__}")
@@ -277,8 +342,8 @@ class LiteEngine:
                 layer_results=best.layer_results,
             )
 
-        # Apply inflammation cascade
-        result = self._apply_inflammation(result, start)
+        # Apply inflammation cascade (per session; no-op when session_id is None)
+        result = self._apply_inflammation(result, start, session_id)
 
         # Council: LLM second opinion for uncertain cases
         if self._config.council.enabled and result.needs_council:
@@ -317,21 +382,26 @@ class LiteEngine:
             council_reasoning=f"Council unavailable, fallback={fallback.value}",
         )
 
-    def _apply_inflammation(self, result: ShieldResult, start: float) -> ShieldResult:
-        """Apply session-level inflammation to the result.
+    def _apply_inflammation(self, result: ShieldResult, start: float, session_id: str | None) -> ShieldResult:
+        """Apply per-session inflammation to the result.
 
-        If previous requests raised inflammation (WARN/BLOCK), the effective
-        risk score gets a small boost, catching iterative probing.
-        Inflammation decays exponentially so it doesn't permanently bias.
-        Thread-safe: all inflammation state access is locked.
+        ``session_id is None`` => stateless, no inflammation (the safe default
+        for a shared engine). With a session_id, previous WARN/BLOCK decisions in
+        *that* session boost the effective risk score (catching iterative
+        probing) and decay exponentially. State is isolated per session and
+        LRU-bounded. Thread-safe: all access is locked.
         """
+        if session_id is None:
+            return result
+
         with self._inflammation_lock:
-            # Boost risk score by current inflammation level
-            if self._inflammation > 0.01:
-                boosted_score = min(1.0, result.risk_score + self._inflammation)
-                # Only re-decide if score actually changed meaningfully
+            level = self._inflammation.get(session_id, 0.0)
+
+            # Boost this request's score by the session's current inflammation.
+            if level > 0.01:
+                boosted_score = min(1.0, result.risk_score + level)
                 if boosted_score > result.risk_score + 0.005:
-                    new_decision = _decide(boosted_score, _META_THRESHOLD)
+                    new_decision = _decide(boosted_score, _META_THRESHOLD, self._config.thresholds.jitter_sigma)
                     latency = (time.perf_counter() - start) * 1000
                     result = ShieldResult(
                         risk_score=round(boosted_score, 4),
@@ -344,21 +414,32 @@ class LiteEngine:
                         layer_results=result.layer_results,
                     )
 
-            # Update inflammation for NEXT request
-            self._inflammation *= self._INFLAMMATION_DECAY
-
+            # Decay, then bump on a hostile verdict — for THIS session's next request.
+            level *= self._INFLAMMATION_DECAY
             if result.decision in (Decision.WARN, Decision.BLOCK):
-                self._inflammation = min(
+                level = min(
                     self._MAX_INFLAMMATION,
-                    self._inflammation + self._INFLAMMATION_BOOST * result.risk_score,
+                    level + self._INFLAMMATION_BOOST * result.risk_score,
                 )
+
+            # Persist (with LRU eviction) or garbage-collect a decayed session.
+            if level > 0.01:
+                self._inflammation[session_id] = level
+                self._inflammation.move_to_end(session_id)
+                while len(self._inflammation) > self._MAX_SESSIONS:
+                    self._inflammation.popitem(last=False)
+            else:
+                self._inflammation.pop(session_id, None)
 
         return result
 
-    def reset_session(self) -> None:
-        """Reset inflammation state for a new session."""
+    def reset_session(self, session_id: str | None = None) -> None:
+        """Clear inflammation state: one session, or all sessions when None."""
         with self._inflammation_lock:
-            self._inflammation = 0.0
+            if session_id is None:
+                self._inflammation.clear()
+            else:
+                self._inflammation.pop(session_id, None)
 
     @property
     def active_layers(self) -> list[str]:

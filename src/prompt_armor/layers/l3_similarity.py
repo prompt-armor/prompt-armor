@@ -10,6 +10,7 @@ Falls back to sentence-transformers if ONNX model not available.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import time
@@ -33,13 +34,98 @@ _CATEGORY_MAP: dict[str, Category | None] = {**CATEGORY_MAP, "benign": None}
 _V1_ATTACKS_PATH = Path(__file__).parent.parent / "data" / "attacks" / "known_attacks.jsonl"
 _V2_ATTACKS_PATH = Path(__file__).parent.parent / "data" / "attacks" / "known_attacks_v2.jsonl"
 _DEFAULT_ATTACKS_PATH = _V2_ATTACKS_PATH if _V2_ATTACKS_PATH.exists() else _V1_ATTACKS_PATH
+# Curated benign exemplars that are injection-SHAPED but benign-intent (mostly
+# multilingual: "ignore os erros de digitação"). L3 raw-matches these to attacks;
+# we down-weight an input that is at least as similar to one of these as to any
+# attack — see the benign-margin gate in analyze().
+_BENIGN_EXEMPLARS_PATH = Path(__file__).parent.parent / "data" / "attacks" / "benign_exemplars.jsonl"
 _ONNX_MODEL_PATH = Path(__file__).parent.parent / "data" / "models" / "l3-contrastive-onnx"
 _CONTRASTIVE_MODEL_PATH = Path(__file__).parent.parent / "data" / "models" / "l3-contrastive"
 _DEFAULT_MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
 
+# Pinned revision for supply-chain security (mirrors L2's revision pin). The L3
+# ONNX graph is data (not code-bearing like the L5 pickle), so revision pinning
+# is the proportionate control: an attacker cannot swap the artifact served
+# under a fixed commit hash.
+_ONNX_MODEL_REVISION = "e634d5b16c26d71c7b841ef56c13c18a7dd5f49d"
+
 # Similarity thresholds
 _HIGH_SIMILARITY = 0.75
 _MEDIUM_SIMILARITY = 0.60
+
+# Persisted FAISS index. Re-embedding the whole attack corpus on every engine
+# construction is the dominant cold-start cost (~tens of seconds). We load a
+# prebuilt index and skip the encode, from two sources, in order:
+#   1. A bundled index shipped in the wheel (data/index/) — so even the FIRST
+#      run after `pip install` / `docker run` is fast, no encode at all.
+#   2. A user cache (~/.prompt-armor/cache/) written on first build — covers a
+#      stale/absent bundled index (e.g. a locally-updated attack DB).
+# The signature pins the attack-DB CONTENT + the pinned model REVISION, so it is
+# stable across machines (independent of file mtime) — the prerequisite for a
+# shippable prebuilt index. Best-effort throughout: any failure falls back to
+# rebuilding and can never break setup.
+_BUNDLED_INDEX_PATH = Path(__file__).parent.parent / "data" / "index" / "l3_faiss_index.bin"
+_BUNDLED_META_PATH = Path(__file__).parent.parent / "data" / "index" / "l3_index_meta.json"
+_CACHE_DIR = Path.home() / ".prompt-armor" / "cache"
+_USER_INDEX_PATH = _CACHE_DIR / "l3_faiss_index.bin"
+_USER_META_PATH = _CACHE_DIR / "l3_index_meta.json"
+# Bump when the index-build logic (filter, dim, normalization) or the signature
+# scheme changes, to invalidate stale on-disk indexes.
+_INDEX_CACHE_VERSION = "2"
+
+
+def _index_cache_sig(attacks_path: Path) -> str | None:
+    """Cross-machine-stable signature over (build version + pinned model
+    revision + attack-DB content). Independent of file mtimes, so a prebuilt
+    index built on one machine matches any install of the same package.
+
+    Returns None if the DB can't be read (caching is then skipped). Keyed on the
+    pinned ``_ONNX_MODEL_REVISION`` rather than the model bytes — if you swap the
+    ONNX model locally, bump that revision (or ``_INDEX_CACHE_VERSION``) so the
+    index is rebuilt.
+    """
+    try:
+        h = hashlib.sha256()
+        h.update(f"{_INDEX_CACHE_VERSION}:{_ONNX_MODEL_REVISION}:".encode())
+        with open(attacks_path, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+        return h.hexdigest()[:24]
+    except OSError:
+        return None
+
+
+def _load_index(sig: str, index_path: Path, meta_path: Path) -> tuple[Any, list[dict[str, str]]] | None:
+    """Load a persisted index iff its signature matches. Best-effort."""
+    try:
+        if not index_path.exists() or not meta_path.exists():
+            return None
+        meta = json.loads(meta_path.read_text())
+        if meta.get("sig") != sig:
+            return None
+        import faiss
+
+        index = faiss.read_index(str(index_path))
+        return index, meta["attack_metadata"]
+    except Exception as e:  # corrupt / version skew -> rebuild
+        logger.warning("L3: ignoring unreadable index at %s: %s", index_path, e)
+        return None
+
+
+def _save_user_cache(sig: str, index: Any, attack_metadata: list[dict[str, str]]) -> None:
+    """Persist the built index to the writable user cache, atomically. Best-effort."""
+    try:
+        import faiss
+
+        _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        tmp_index = _USER_INDEX_PATH.parent / (_USER_INDEX_PATH.name + ".tmp")
+        tmp_meta = _USER_META_PATH.parent / (_USER_META_PATH.name + ".tmp")
+        faiss.write_index(index, str(tmp_index))
+        tmp_meta.write_text(json.dumps({"sig": sig, "attack_metadata": attack_metadata}))
+        tmp_index.replace(_USER_INDEX_PATH)
+        tmp_meta.replace(_USER_META_PATH)
+    except Exception as e:
+        logger.warning("L3: could not write index cache: %s", e)
 
 
 class L3SimilarityLayer(BaseLayer):
@@ -54,6 +140,7 @@ class L3SimilarityLayer(BaseLayer):
         self._st_model: Any = None  # SentenceTransformer fallback
         self._index: Any = None
         self._attack_metadata: list[dict[str, str]] = []
+        self._benign_index: Any = None  # curated benign exemplars (margin gate)
         self._use_onnx = False
 
     def _mean_pool(self, token_embeddings: np.ndarray, attention_mask: np.ndarray) -> np.ndarray:
@@ -74,11 +161,13 @@ class L3SimilarityLayer(BaseLayer):
             hf_hub_download(
                 repo_id="prompt-armor/l3-contrastive-onnx",
                 filename="model_quant.onnx",
+                revision=_ONNX_MODEL_REVISION,
                 local_dir=str(_ONNX_MODEL_PATH),
             )
             hf_hub_download(
                 repo_id="prompt-armor/l3-contrastive-onnx",
                 filename="tokenizer.json",
+                revision=_ONNX_MODEL_REVISION,
                 local_dir=str(_ONNX_MODEL_PATH),
             )
             logger.info("L3: ONNX model downloaded")
@@ -156,6 +245,32 @@ class L3SimilarityLayer(BaseLayer):
 
         # Load attack database
         attacks_path = self._config.attacks_path or _DEFAULT_ATTACKS_PATH
+
+        # Build the small benign-exemplar index now — the attack-index cache
+        # fast-paths below can `return` early, and this must run on every path.
+        self._build_benign_index(faiss)
+
+        # Fast path: load a persisted index to skip re-encoding the corpus (the
+        # dominant cold-start cost). ONNX path only. Prefer the bundled index
+        # shipped in the wheel, then the user cache.
+        cache_sig: str | None = None
+        if self._use_onnx:
+            cache_sig = _index_cache_sig(attacks_path)
+            if cache_sig is not None:
+                for label, ipath, mpath in (
+                    ("bundled", _BUNDLED_INDEX_PATH, _BUNDLED_META_PATH),
+                    ("cached", _USER_INDEX_PATH, _USER_META_PATH),
+                ):
+                    loaded = _load_index(cache_sig, ipath, mpath)
+                    if loaded is not None:
+                        self._index, self._attack_metadata = loaded
+                        logger.info(
+                            "L3: loaded %s FAISS index (%d vectors) — skipped corpus encode",
+                            label,
+                            self._index.ntotal,
+                        )
+                        return
+
         texts: list[str] = []
         self._attack_metadata = []
 
@@ -200,6 +315,37 @@ class L3SimilarityLayer(BaseLayer):
             self._index = faiss.IndexFlatIP(dim)
             self._index.add(embeddings)
 
+        # Persist the built index to the user cache so the next start skips the encode.
+        if cache_sig is not None:
+            _save_user_cache(cache_sig, self._index, self._attack_metadata)
+
+    def _build_benign_index(self, faiss: Any) -> None:
+        """Build a small FAISS index of curated benign exemplars for the margin gate.
+
+        These are injection-shaped but benign-intent phrases (mostly multilingual)
+        that the contrastive model raw-matches to attacks. At analyze time, an
+        input that is at least as similar to one of these as to any attack is
+        treated as benign — fixing the FP without lowering scores on real attacks
+        (which are not similar to the exemplars).
+        """
+        if not _BENIGN_EXEMPLARS_PATH.exists():
+            return
+        texts: list[str] = []
+        with open(_BENIGN_EXEMPLARS_PATH) as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    texts.append(json.loads(line)["text"])
+        if not texts:
+            return
+        if self._use_onnx:
+            emb = self._encode_onnx(texts)
+        else:
+            emb = self._st_model.encode(texts, convert_to_numpy=True, normalize_embeddings=True)
+        emb = np.asarray(emb, dtype=np.float32)
+        self._benign_index = faiss.IndexFlatIP(emb.shape[1])
+        self._benign_index.add(emb)
+
     def analyze(self, text: str) -> LayerResult:
         """Compare prompt against known attacks via cosine similarity."""
         start = time.perf_counter()
@@ -224,10 +370,29 @@ class L3SimilarityLayer(BaseLayer):
         scores, indices = self._index.search(embedding, k)
 
         top_similarity = float(scores[0][0])
+
+        # Benign-margin gate: if the input is at least as similar to a curated
+        # benign exemplar as to any attack, it is an injection-shaped-but-benign
+        # phrase (e.g. "ignore os erros de digitação") — suppress the score, and
+        # skip the (misleading) attack evidence. Real attacks are not close to the
+        # exemplars, so their score and evidence are untouched (recall preserved).
+        suppressed = False
+        if self._benign_index is not None and self._benign_index.ntotal > 0:
+            benign_scores, _ = self._benign_index.search(embedding, 1)
+            top_benign_sim = float(benign_scores[0][0])
+            # Strict: only suppress an input that is a near-duplicate of a curated
+            # benign exemplar AND is at least as benign-like as attack-like. Real
+            # attacks are not near-duplicates of the exemplars, so they pass.
+            if top_benign_sim >= 0.92 and top_benign_sim >= top_similarity:
+                top_similarity = 0.0
+                suppressed = True
+
         evidence: list[Evidence] = []
         categories_seen: set[Category] = set()
 
         for i in range(k):
+            if suppressed:
+                break
             sim = float(scores[0][i])
             idx = int(indices[0][i])
             if sim < _MEDIUM_SIMILARITY:
