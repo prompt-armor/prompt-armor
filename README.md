@@ -248,7 +248,7 @@ We report **two numbers** — the harder internal benchmark and the same-distrib
 | **Recall** | 76.3% | ~1 in 5 attacks miss (model is precision-leaning) |
 | **Avg Latency** | ~24ms | Warm. First call adds a one-time model load + FAISS index build, cached after the first run |
 
-> Honesty note: fusion thresholds/coefficients are currently tuned on this benchmark (no holdout), so 84.4% is an in-sample number. A leakage guard (`tests/test_no_leakage.py`) confirms benchmark↔attack-DB overlap stays low (~1.9%); a held-out out-of-sample number is tracked as future work.
+> **Honesty note — leakage audited, not asserted.** The shipped fusion thresholds/coefficients are tuned on this benchmark, so 84.4% is an *in-sample* number. We measured the honest out-of-sample counterpart with [`scripts/eval_holdout.py`](scripts/eval_holdout.py): a **cluster-aware 70/30 split** (no held-out attack shares a near-duplicate with train) with the decision **threshold selected on train only**, averaged over 10 splits → **85.5% ± 1.2%**, statistically indistinguishable from the in-sample figure. So the benchmark is **not materially leakage-inflated**. On attacks with *no* near-duplicate in the L3 index (the zero-day case), recall holds at **81%**; benchmark↔attack-DB overlap is ~1.9% (guarded by `tests/test_no_leakage.py`). Reproduce: `python scripts/eval_holdout.py`.
 
 **External evaluation** ([jayavibhav/prompt-injection](https://huggingface.co/datasets/jayavibhav/prompt-injection), 1K real-world samples):
 

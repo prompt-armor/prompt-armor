@@ -5,8 +5,9 @@ After reconciling the docs to one canonical framing, this test prevents the
 surfaces only — NOT the CHANGELOG or the dated blog post (legitimate historical
 records) and NOT docs/layers.md (per-layer technical latencies).
 
-Canonical framing (decided 2026-06): F1 86.9% internal (1,534-sample) /
-98.87% external (jayavibhav, same-distribution). Latency ~24ms warm.
+Canonical framing (decided 2026-06): F1 84.4% internal (1,534-sample) /
+98.87% external (jayavibhav, same-distribution). Latency ~24ms warm. The
+out-of-sample validation figure (85.5%, scripts/eval_holdout.py) is also allowed.
 """
 
 from __future__ import annotations
@@ -33,8 +34,12 @@ _LIVE_FILES = [
     "integrations/openclaw-plugin/src/index.ts",
 ]
 
-# The ONLY F1 figures allowed in live surfaces.
-_CANONICAL_F1 = {"84.4", "98.87"}
+# F1 figures allowed in live surfaces: the two canonical headline numbers plus
+# the out-of-sample validation figure (held-out F1, scripts/eval_holdout.py),
+# deliberately cited alongside the in-sample 84.4% to prove it is not
+# leakage-inflated. 84.4% / 98.87% remain THE headline (enforced present below).
+_HEADLINE_F1 = {"84.4", "98.87"}
+_CANONICAL_F1 = _HEADLINE_F1 | {"85.5"}
 
 # Stale headline latencies that the reconciliation removed. (Competitor latencies
 # like ~50ms / ~100ms in the comparison table are fine — hence a denylist, not an
@@ -59,7 +64,7 @@ def test_f1_claims_are_canonical(path):
     bad = sorted({n for n in found if n not in _CANONICAL_F1})
     assert not bad, (
         f"{path.relative_to(_ROOT)} cites non-canonical F1 {bad}. "
-        f"Use only {sorted(_CANONICAL_F1)} (86.9% internal / 98.87% external)."
+        f"Use only {sorted(_CANONICAL_F1)} (84.4% in-sample / 98.87% external / 85.5% held-out)."
     )
 
 
