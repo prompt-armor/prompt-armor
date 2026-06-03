@@ -3,11 +3,8 @@
 ## Installation
 
 ```bash
-# Core only (L1 regex + L4 structural, <1ms, ~2MB install)
+# All 5 layers (L1 regex + L2 DeBERTa + L3 similarity + L4 structural + L5 anomaly)
 pip install prompt-armor
-
-# With ML layers (adds L2 DeBERTa + L3 ONNX similarity + L5 anomaly, ~24ms warm)
-pip install "prompt-armor[ml]"
 
 # With MCP server support
 pip install "prompt-armor[mcp]"
@@ -73,6 +70,6 @@ prompt-armor-mcp
 
 The server exposes an `analyze_prompt` tool that returns the full analysis result.
 
-## Without ML Dependencies
+## First run
 
-If you install without `[ml]`, only L1 (regex) and L4 (structural) layers are active. Detection is faster (<1ms) but catches only obvious patterns. The engine gracefully degrades — no errors, just lower recall.
+All five layers ship with the base install. The first `analyze()` downloads the L2 DeBERTa classifier (~83MB) from HuggingFace and loads the bundled L3 index — a one-time cost of a few seconds. Every call after that is ~24ms warm and fully offline; that first-run download is the only network access prompt-armor makes.

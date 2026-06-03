@@ -221,9 +221,19 @@ class L5NegativeSelectionLayer(BaseLayer):
                 f"Refusing to load untrusted pickle at {_MODEL_PATH}."
             )
 
-        import joblib
+        import warnings
 
-        data = joblib.load(_MODEL_PATH)
+        import joblib
+        from sklearn.exceptions import InconsistentVersionWarning
+
+        # The shipped L5 artifact is pickled with a specific scikit-learn version;
+        # a newer installed sklearn raises InconsistentVersionWarning ("might lead to
+        # invalid results — use at your own risk") on EVERY load. The artifact is
+        # sha256-verified above and unpickles correctly across minor versions, so
+        # silence that one precautionary warning instead of alarming users per call.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", InconsistentVersionWarning)
+            data = joblib.load(_MODEL_PATH)
         self._model = data["model"]
         self._score_min = data["score_min"]
         self._score_max = data["score_max"]

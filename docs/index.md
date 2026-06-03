@@ -18,7 +18,7 @@
 ## Install
 
 ```bash
-pip install "prompt-armor[ml]"
+pip install prompt-armor
 ```
 
 ## Quick Example

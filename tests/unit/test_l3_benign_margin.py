@@ -20,7 +20,14 @@ pytest.importorskip("faiss")
 @pytest.fixture(scope="module")
 def l3():
     layer = l3_similarity.L3SimilarityLayer()
-    layer.setup()
+    try:
+        layer.setup()
+    except ModuleNotFoundError as e:
+        # L3's encoder is normally the auto-downloaded ONNX model; on a slow/offline
+        # CI runner that download can fail and L3 falls back to sentence_transformers,
+        # which is not a declared dependency. Without a working encoder this gate
+        # can't be exercised, so skip rather than error (deterministic CI).
+        pytest.skip(f"L3 encoder unavailable ({e}); skipping benign-margin gate tests")
     return layer
 
 

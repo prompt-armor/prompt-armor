@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "prompt-armor"
-version = "0.9.0"
+version = "0.9.1"
 description = "Open-core LLM prompt security analysis — detect prompt injections, jailbreaks, and other attacks"
 readme = "README.md"
 license = "Apache-2.0"
@@ -30,16 +30,21 @@ dependencies = [
     "pydantic>=2.0",
     "numpy>=1.24",
     "regex>=2023.0",
-]
-
-[project.optional-dependencies]
-ml = [
+    # ML detection layers (L2 DeBERTa-ONNX, L3 FAISS, L5 IsolationForest) ship by
+    # default: the fusion meta-classifier is trained expecting them, so without
+    # them a base install silently under-scores real attacks (a textbook injection
+    # returns ALLOW). They are NOT optional — see tests/unit/test_default_install.py.
     "onnxruntime>=1.16",
     "tokenizers>=0.15",
     "faiss-cpu>=1.7",
     "scikit-learn>=1.3",
     "huggingface-hub>=0.20",
 ]
+
+[project.optional-dependencies]
+# Back-compat shim: the ML layers used to live here and are now core deps (above),
+# so `prompt-armor[ml]` resolves to the same thing as the plain base install.
+ml = []
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
@@ -52,7 +57,7 @@ mcp = [
     "mcp>=1.0",
 ]
 all = [
-    "prompt-armor[ml,dev,mcp]",
+    "prompt-armor[dev,mcp]",
 ]
 
 [project.scripts]

@@ -120,8 +120,11 @@ def main() -> None:
 
     print(
         "VERDICT: DB-memorization leakage is small; the real inflation is "
-        "test-set tuning (#3) + benign-side L3 training (#2). Report a held-out, "
-        "out-of-DB number alongside the in-sample one."
+        "test-set tuning (#3) + benign-side L3 training (#2). The held-out, "
+        "out-of-DB number is now measured in scripts/eval_holdout.py: a cluster-aware "
+        "70/30 split with the threshold picked on train only scores F1 85.5% +/- 1.2% "
+        "(out-of-DB recall 81%), indistinguishable from the in-sample 84.4% -- so the "
+        "benchmark is not materially leakage-inflated."
     )
 
 
