@@ -265,10 +265,7 @@ Attack DB v2: 1,509 high-specificity curated entries (from 25,160 raw). L3 contr
 ## Installation
 
 ```bash
-# With ML layers (recommended — 5 layers, ~50MB, models auto-download)
-pip install "prompt-armor[ml]"
-
-# Core only (L1 regex + L4 structural — no ML deps, ~2MB)
+# 5 fused layers — ML models auto-download on first use
 pip install prompt-armor
 
 # With MCP server
