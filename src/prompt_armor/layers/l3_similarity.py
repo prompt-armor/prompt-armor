@@ -20,7 +20,7 @@ from typing import Any
 import numpy as np
 
 from prompt_armor.config import ShieldConfig
-from prompt_armor.layers.base import BaseLayer
+from prompt_armor.layers.base import BaseLayer, onnx_session_options
 from prompt_armor.models import CATEGORY_MAP, Category, Evidence, LayerResult
 
 logger = logging.getLogger("prompt_armor")
@@ -215,7 +215,9 @@ class L3SimilarityLayer(BaseLayer):
             import onnxruntime as ort
             from tokenizers import Tokenizer
 
-            self._onnx_session = ort.InferenceSession(str(onnx_model), providers=["CPUExecutionProvider"])
+            self._onnx_session = ort.InferenceSession(
+                str(onnx_model), onnx_session_options(), providers=["CPUExecutionProvider"]
+            )
             self._tokenizer = Tokenizer.from_file(str(onnx_tokenizer))
             self._tokenizer.enable_padding(pad_id=1, pad_token="<pad>")
             self._tokenizer.enable_truncation(max_length=128)

@@ -13,7 +13,7 @@ import hashlib
 
 import pytest
 
-from prompt_armor.layers import l3_similarity, l5_negative_selection
+from prompt_armor.layers import l2_classifier, l3_similarity, l5_negative_selection
 
 
 def test_l5_pins_revision_and_hash():
@@ -26,6 +26,16 @@ def test_l5_pins_revision_and_hash():
 def test_l3_pins_revision():
     rev = l3_similarity._ONNX_MODEL_REVISION
     assert len(rev) == 40 and int(rev, 16) >= 0
+
+
+def test_l2_pins_revision():
+    rev = l2_classifier.L2ClassifierLayer._MODEL_REVISION
+    assert len(rev) == 40 and int(rev, 16) >= 0
+
+
+def test_l2_downloads_from_the_project_org():
+    """L2 must come from a repo the project controls (0.9.1's third-party source vanished)."""
+    assert l2_classifier.L2ClassifierLayer._MODEL_ID.startswith("prompt-armor/")
 
 
 def test_sha256_helper_matches_known_value(tmp_path):
