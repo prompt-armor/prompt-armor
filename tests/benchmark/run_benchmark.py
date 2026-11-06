@@ -27,6 +27,7 @@ logging.getLogger("transformers").setLevel(logging.ERROR)
 logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
 
 DATASET_DIR = Path(__file__).parent / "dataset"
+_EXPECTED_LAYERS = ("l1_regex", "l2_classifier", "l3_similarity", "l4_structural", "l5_negative_selection")
 
 
 @dataclass
@@ -48,6 +49,7 @@ class BenchmarkMetrics:
     min_latency_ms: float = 0.0
     total_time_s: float = 0.0
     active_layers: list[str] = field(default_factory=list)
+    degraded_layers: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
 
@@ -62,7 +64,9 @@ def load_dataset(path: Path) -> list[dict]:
     return samples
 
 
-def run_benchmark(dataset_dir: Path | None = None, output_path: Path | None = None) -> BenchmarkMetrics:
+def run_benchmark(
+    dataset_dir: Path | None = None, output_path: Path | None = None, allow_degraded: bool = False
+) -> BenchmarkMetrics:
     """Run the benchmark and return metrics."""
     dataset_dir = dataset_dir or DATASET_DIR
 
@@ -100,11 +104,23 @@ def run_benchmark(dataset_dir: Path | None = None, output_path: Path | None = No
         sys.stdout = old_stdout
 
     print(f"Active layers: {engine.active_layers}")
+    print(f"Degraded layers: {engine.degraded_layers or 'none'}")
     print()
+
+    # A missing or degraded layer still produces numbers, just wrong ones (0.9.1:
+    # L2 on the keyword fallback scored F1 56.3% while this script looked healthy).
+    # Refuse to report them as the benchmark.
+    missing = sorted(set(_EXPECTED_LAYERS) - set(engine.active_layers))
+    if (missing or engine.degraded_layers) and not allow_degraded:
+        engine.close()
+        print(f"Error: missing layers {missing}, degraded layers {engine.degraded_layers}.")
+        print("Results would not reflect the shipped engine. Pass --allow-degraded to run anyway.")
+        sys.exit(1)
 
     metrics = BenchmarkMetrics(
         total_samples=len(benign_samples) + len(malicious_samples),
         active_layers=engine.active_layers,
+        degraded_layers=engine.degraded_layers,
     )
 
     latencies: list[float] = []
@@ -206,9 +222,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="prompt-armor benchmark")
     parser.add_argument("--dataset", type=Path, default=DATASET_DIR, help="Dataset directory")
     parser.add_argument("--output", type=Path, help="Output JSON file")
+    parser.add_argument("--allow-degraded", action="store_true", help="Run even if a layer is missing or on a fallback")
+    parser.add_argument("--min-f1", type=float, help="Exit non-zero if F1 falls below this value (e.g. 0.82)")
     args = parser.parse_args()
 
-    run_benchmark(args.dataset, args.output)
+    metrics = run_benchmark(args.dataset, args.output, args.allow_degraded)
+    if args.min_f1 is not None and metrics.f1_score < args.min_f1:
+        print(f"\nError: F1 {metrics.f1_score:.2%} is below the required {args.min_f1:.2%}.")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

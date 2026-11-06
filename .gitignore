@@ -42,6 +42,7 @@ src/prompt_armor/data/models/*.npy
 src/prompt_armor/data/models/*.json
 src/prompt_armor/data/models/l3-contrastive/
 src/prompt_armor/data/models/l3-contrastive-onnx/
+src/prompt_armor/data/models/l2-deberta-onnx/
 !src/prompt_armor/data/models/.gitkeep
 
 # Script outputs (generated, not tracked)

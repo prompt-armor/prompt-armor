@@ -15,6 +15,21 @@ class TestLiteEngine:
         assert "l4_structural" in engine.active_layers
         engine.close()
 
+    def test_no_layer_is_degraded(self) -> None:
+        """All five layers load their real models; none runs a fallback."""
+        engine = LiteEngine(ShieldConfig())
+        try:
+            assert sorted(engine.active_layers) == [
+                "l1_regex",
+                "l2_classifier",
+                "l3_similarity",
+                "l4_structural",
+                "l5_negative_selection",
+            ]
+            assert engine.degraded_layers == []
+        finally:
+            engine.close()
+
     def test_analyze_benign(self) -> None:
         engine = LiteEngine(ShieldConfig())
         result = engine.analyze("What is the weather today?")

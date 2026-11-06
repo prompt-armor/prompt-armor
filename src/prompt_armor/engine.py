@@ -252,6 +252,11 @@ class LiteEngine:
             except Exception as e:
                 logger.warning("Layer %s failed to setup: %s, disabling", layer.name, e)
         self._layers = loaded
+        if self.degraded_layers:
+            logger.warning(
+                "Layers running in degraded fallback mode: %s. Detection quality will not match the published metrics.",
+                ", ".join(self.degraded_layers),
+            )
 
         # Initialize analytics collector if enabled
         self._collector = None
@@ -445,6 +450,11 @@ class LiteEngine:
     def active_layers(self) -> list[str]:
         """Return names of active layers."""
         return [layer.name for layer in self._layers]
+
+    @property
+    def degraded_layers(self) -> list[str]:
+        """Return names of active layers running a fallback instead of their model."""
+        return [layer.name for layer in self._layers if layer.degraded]
 
     def close(self) -> None:
         """Shut down the thread pool and analytics collector."""

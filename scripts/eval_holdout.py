@@ -88,6 +88,9 @@ def collect_scores(refresh: bool) -> list[dict]:
     finally:
         sys.stdout = old
     print(f"Active layers: {engine.active_layers}")
+    if engine.degraded_layers:
+        engine.close()
+        sys.exit(f"Refusing to evaluate: degraded layers {engine.degraded_layers} (fallback scores, not the shipped models).")
 
     samples: list[dict] = []
     for path, label in [(_BENCH_DIR / "benign.jsonl", 0), (_BENCH_DIR / "malicious.jsonl", 1)]:

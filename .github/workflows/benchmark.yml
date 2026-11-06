@@ -3,6 +3,10 @@ name: Benchmark
 on:
   push:
     branches: [main]
+  # Also on PRs, so a release PR shows the number it will publish before merging.
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
 
 jobs:
   benchmark:
@@ -27,9 +31,12 @@ jobs:
       - name: Run benchmark
         run: |
           source .venv/bin/activate
-          python tests/benchmark/run_benchmark.py --output benchmark_results.json
+          # Fails on a missing/degraded layer (0.9.1's silent L2 fallback) and if F1
+          # drops more than a point below the published figure (82.9% in-sample).
+          python tests/benchmark/run_benchmark.py --output benchmark_results.json --min-f1 0.819
 
       - name: Upload results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-results

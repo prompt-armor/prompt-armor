@@ -18,57 +18,55 @@ from collections import Counter
 from prompt_armor.config import ShieldConfig
 from prompt_armor.models import Category, Decision, Evidence, LayerResult, ShieldResult
 
-# --- Trained meta-classifier coefficients (v4 — Phase 1 L3 FP reduction) ---
-# Base: v3 coefficients. Change: L5 excluded from n_above_0.1 count
-# (L5 fires on 100% of inputs, inflating the strongest feature).
-# L3 threshold raised 0.55→0.60, attack DB entries < 30 chars filtered.
-# Negative coefficients clamped to 0 (prevent adversarial score reduction).
-# --- Trained meta-classifier coefficients (v4 — Phase 1 + Phase 2) ---
-# Base: v3 coefficients (trained on 515 samples).
-# Phase 1: L5 excluded from n_above_0.1, L3 threshold 0.55→0.60, DB min 30 chars.
-# Phase 2: l3_solo post-processing dampening (not in logistic regression).
-# Negative coefficients clamped to 0.
+# --- Trained meta-classifier coefficients (v5 — L2 swapped to DeBERTa-v3-base, v0.9.2) ---
+# scripts/train_fusion.py on the 1,534-sample benchmark (70/30 stratified split,
+# 5-fold CV on the 70%). Non-negative by construction: features whose weight
+# came out negative (l4_structural, l5_negative_selection, min_score, l1 × l4 interaction) are pinned to 0 and the rest
+# refit, so raising a layer's score can never lower the fused risk.
+# The F1-optimal threshold (0.52), picked on the held-out 30% by scoring the
+# deployed decision function (hard block + L3-solo dampening), is folded into
+# the intercept, so the decision threshold stays at 0.50.
 _META_COEFS = [
-    0.0601,  # l1_regex
-    0.3018,  # l2_classifier
-    0.3368,  # l3_similarity
-    0.0,  # l4_structural (clamped from -0.017)
-    0.0,  # l5_negative_selection (clamped from -0.004)
-    0.2860,  # max_score
-    0.0,  # min_score (negligible)
-    0.0130,  # l1 × l4 interaction
-    0.2266,  # l2 × l3 interaction
-    0.6936,  # n_layers_above_0.1 (L5 excluded from count)
+    0.2777,  # l1_regex
+    0.6973,  # l2_classifier
+    1.846,  # l3_similarity
+    0.0,  # l4_structural  (pinned to 0 at train time)
+    0.0,  # l5_negative_selection  (pinned to 0 at train time)
+    0.749,  # max_score
+    0.0,  # min_score  (pinned to 0 at train time)
+    0.0,  # l1 × l4 interaction  (pinned to 0 at train time)
+    0.9155,  # l2 × l3 interaction
+    0.8179,  # n_layers_above_0.1 (L5 excluded from count)
 ]
-_META_INTERCEPT = -1.9898
-_META_THRESHOLD = 0.50  # Optimal F1 threshold
+_META_INTERCEPT = -2.0359
+_META_THRESHOLD = 0.50  # Optimal F1 threshold (folded into the intercept)
 
 # --- Isotonic calibration (raw_score → calibrated P(attack)) ---
-# Fit via IsotonicRegression on held-out test set (v0.7.0 coefs + 515 samples).
-# ECE before: 0.0342, after: 0.0000 (perfect on held-out).
+# Fit via IsotonicRegression on the held-out 30% (v5 coefficients).
+# ECE before: 0.0286, after: 0.0 (on the same held-out split).
 # Piecewise-linear lookup for zero-dependency runtime.
 _CALIBRATION_POINTS: list[tuple[float, float]] = [
-    (0.0, 0.0),
-    (0.05, 0.0),
-    (0.1, 0.0),
-    (0.15, 0.0),
-    (0.2, 0.0),
-    (0.25, 0.0),
-    (0.3, 0.0),
-    (0.35, 0.0),
-    (0.4, 0.042),
-    (0.45, 0.0912),
-    (0.5, 0.1404),
-    (0.55, 0.1896),
-    (0.6, 0.2389),
-    (0.65, 0.25),
-    (0.7, 0.3141),
-    (0.75, 0.5),
-    (0.8, 0.5047),
-    (0.85, 0.6021),
-    (0.9, 0.6667),
-    (0.95, 1.0),
-    (1.0, 1.0),
+    (0.0, 0.1032),
+    (0.05, 0.1032),
+    (0.1, 0.1032),
+    (0.15, 0.2105),
+    (0.2, 0.2105),
+    (0.25, 0.2105),
+    (0.3, 0.2105),
+    (0.35, 0.25),
+    (0.4, 0.25),
+    (0.45, 0.25),
+    (0.5, 0.3729),
+    (0.55, 0.68),
+    (0.6, 0.68),
+    (0.65, 0.68),
+    (0.7, 0.68),
+    (0.75, 0.68),
+    (0.8, 0.68),
+    (0.85, 0.68),
+    (0.9, 0.9492),
+    (0.95, 0.9492),
+    (1.0, 0.9492),
 ]
 
 
@@ -107,6 +105,40 @@ def _calibrate(raw: float) -> float:
     return y0 + t * (y1 - y0)
 
 
+def _hard_block(l1: float, l2: float, l3: float, l4: float, l5: float, threshold: float) -> bool:
+    """A layer at/above ``threshold``, corroborated by a second layer, blocks outright.
+
+    Require corroboration unless the signal is overwhelming: L3 alone can reach
+    0.95+ on benign prompts (284/307 FPs on jayavibhav 327K). L5 counts as a
+    corroborator only when it's highly confident (> 0.3), given its
+    post-recalibration discrimination ratio (20.5% in malicious vs 3.7% in
+    benign on internal benchmark v2).
+    """
+    if max(l1, l2, l3, l4, l5) < threshold:
+        return False
+    n_layers_with_signal = sum(1 for s in [l1, l2, l3, l4] if s > 0.1)
+    if l5 > 0.3:
+        n_layers_with_signal += 1
+    return n_layers_with_signal >= 2
+
+
+def _l3_solo_factor(l1: float, l2: float, l3: float, l4: float, l5: float) -> float:
+    """Dampening applied to the fused risk when L3 is the only layer with signal.
+
+    83.7% of FPs on jayavibhav 327K dataset are L3-only. L5 > 0.3 counts as
+    corroboration (post-recalibration: malicious 20% vs benign 3.7% at that
+    threshold), so L3+L5 is NOT solo. Shared with scripts/train_fusion.py, which
+    picks the decision threshold on this deployed function, not the raw sigmoid.
+    """
+    if not (l3 > 0.2 and l1 == 0 and l2 < 0.15 and l4 < 0.1 and l5 <= 0.3):
+        return 1.0
+    if l3 < 0.5:
+        return 0.3  # Low L3 — very likely FP
+    if l3 < 0.8:
+        return 0.5  # Medium L3 — probably FP
+    return 0.7  # High L3 — might be real, gentle dampen
+
+
 def fuse_results(
     layer_results: list[LayerResult],
     config: ShieldConfig,
@@ -139,16 +171,8 @@ def fuse_results(
     max_score = max(scores)
 
     # --- Hard block: if any layer has very high confidence score ---
-    # Require corroboration unless the signal is overwhelming (>= 0.99).
-    # L3 alone can reach 0.95+ on benign prompts (284/307 FPs on jayavibhav 327K).
     if max_score >= config.thresholds.hard_block:
-        # L5 counts as corroborator only when it's highly confident (>= 0.3),
-        # given its post-recalibration discrimination ratio (20.5% in malicious
-        # vs 3.7% in benign on internal benchmark v2).
-        n_layers_with_signal = sum(1 for s in [l1, l2, l3, l4] if s > 0.1)
-        if l5 > 0.3:
-            n_layers_with_signal += 1
-        if n_layers_with_signal >= 2:
+        if _hard_block(l1, l2, l3, l4, l5, config.thresholds.hard_block):
             hb_evidence: list[Evidence] = []
             hb_categories: list[Category] = []
             for lr in layer_results:
@@ -190,20 +214,7 @@ def fuse_results(
     risk_score = _sigmoid(logit)
 
     # --- L3 solo dampening (Phase 2 + L5 corroboration A/B) ---
-    # When L3 is the only layer with signal, dampen the score.
-    # 83.7% of FPs on jayavibhav 327K dataset are L3-only.
-    # L5 > 0.3 now counts as corroboration (post-recalibration: malicious 20%
-    # vs benign 3.7% at that threshold), so L3+L5 is NOT solo.
-    l3_solo = (
-        l3 > 0.2 and l1 == 0 and l2 < 0.15 and l4 < 0.1 and l5 <= 0.3  # L5 > 0.3 corroborates, not solo anymore
-    )
-    if l3_solo:
-        if l3 < 0.5:
-            risk_score *= 0.3  # Low L3 — very likely FP
-        elif l3 < 0.8:
-            risk_score *= 0.5  # Medium L3 — probably FP
-        else:
-            risk_score *= 0.7  # High L3 — might be real, gentle dampen
+    risk_score *= _l3_solo_factor(l1, l2, l3, l4, l5)
 
     # --- Confidence ---
     # Calibrated P(attack) via piecewise-linear isotonic regression.

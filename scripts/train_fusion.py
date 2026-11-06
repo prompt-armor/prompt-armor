@@ -29,8 +29,50 @@ from sklearn.model_selection import StratifiedKFold
 
 DEFAULT_SCORES = Path(__file__).parent / "layer_scores.json"
 
+FEATURE_NAMES = [
+    "l1_regex",
+    "l2_classifier",
+    "l3_similarity",
+    "l4_structural",
+    "l5_negative_selection",
+    "max_score",
+    "min_score",
+    "l1_x_l4",
+    "l2_x_l3",
+    "n_above_0.1",
+]
 
-def train_fusion(scores_path: Path, holdout_ratio: float = 0.3) -> None:
+
+def _fit(x_train: np.ndarray, y_train: np.ndarray, allow_negative: bool) -> tuple[LogisticRegressionCV, list[int]]:
+    """Fit the meta-classifier, keeping every coefficient non-negative.
+
+    fusion.py forbids negative weights: a caller who can raise one layer's score
+    (e.g. pad a prompt with structure that L4 flags) must never be able to LOWER
+    the fused risk. Clamping negatives to 0 after the fit biases the model, so
+    instead the most negative feature is pinned to 0 (dropped) and the rest are
+    refit, until every remaining weight is >= 0. Returns the classifier and the
+    indices of the features it was fit on.
+    """
+    active = list(range(x_train.shape[1]))
+    while True:
+        clf = LogisticRegressionCV(
+            Cs=20,
+            cv=StratifiedKFold(5, shuffle=True, random_state=42),
+            scoring="f1",
+            class_weight="balanced",
+            max_iter=2000,
+            random_state=42,
+        )
+        clf.fit(x_train[:, active], y_train)
+        weights = clf.coef_[0]
+        if allow_negative or (weights >= 0).all():
+            return clf, active
+        worst = active[int(np.argmin(weights))]
+        print(f"  {FEATURE_NAMES[worst]} came out negative ({weights.min():+.4f}); pinning to 0 and refitting")
+        active.remove(worst)
+
+
+def train_fusion(scores_path: Path, holdout_ratio: float = 0.3, allow_negative: bool = False) -> None:
     # Load data
     with open(scores_path) as f:
         samples = json.load(f)
@@ -78,15 +120,9 @@ def train_fusion(scores_path: Path, holdout_ratio: float = 0.3) -> None:
 
     # Train with stratified 5-fold CV on TRAIN set only
     print("Training LogisticRegressionCV (5-fold stratified, balanced weights)...")
-    clf = LogisticRegressionCV(
-        Cs=20,
-        cv=StratifiedKFold(5, shuffle=True, random_state=42),
-        scoring="f1",
-        class_weight="balanced",
-        max_iter=2000,
-        random_state=42,
-    )
-    clf.fit(x_train, y_train)
+    clf, active = _fit(x_train, y_train, allow_negative)
+    raw_test = x_test[:, :5].copy()  # l1..l5, for the deployed decision function below
+    x_train, x_test = x_train[:, active], x_test[:, active]
 
     print(f"Best C: {clf.C_[0]:.4f}")
     print()
@@ -103,65 +139,71 @@ def train_fusion(scores_path: Path, holdout_ratio: float = 0.3) -> None:
     print("=== HELD-OUT Test Set Metrics (HONEST) ===")
     print(classification_report(y_test, y_pred_test, target_names=["benign", "malicious"]))
 
-    # Use test set for threshold optimization
-    y_prob = y_prob_test
-    y_eval = y_test
+    # Pick the decision threshold on the HELD-OUT split, scoring the function that
+    # actually ships: fusion.py hard-blocks corroborated >= 0.95 signals and
+    # dampens L3-only risk AFTER the sigmoid. Choosing it on the raw sigmoid
+    # instead mismatched training and deployment (cost ~3 F1 points in v0.9.2).
+    from prompt_armor.config import ShieldConfig
+    from prompt_armor.fusion import _META_THRESHOLD, _hard_block, _l3_solo_factor
 
-    # Find optimal threshold on HELD-OUT test set
-    print("=== Threshold Optimization (on held-out test set) ===")
-    best_f1 = 0
-    best_thresh = 0.5
+    hard_block = ShieldConfig().thresholds.hard_block
+    test_logits = clf.decision_function(x_test)
+
+    def deployed_risk(threshold: float) -> np.ndarray:
+        shift = -np.log(threshold / (1 - threshold))
+        risks = []
+        for z, (l1, l2, l3, l4, l5) in zip(test_logits, raw_test):
+            if _hard_block(l1, l2, l3, l4, l5, hard_block):
+                risks.append(max(l1, l2, l3, l4, l5))
+            else:
+                risks.append(_l3_solo_factor(l1, l2, l3, l4, l5) / (1.0 + np.exp(-(z + shift))))
+        return np.array(risks)
+
+    y_eval = y_test
+    print("=== Threshold Optimization (held-out test set, deployed decision function) ===")
+    best_f1, best_thresh = 0.0, 0.5
+    best_recall_at_prec85, thresh_at_prec85 = 0.0, 0.5
     for thresh in np.arange(0.1, 0.9, 0.01):
-        preds = (y_prob >= thresh).astype(int)
+        preds = (deployed_risk(thresh) >= _META_THRESHOLD).astype(int)
         f1 = f1_score(y_eval, preds)
         if f1 > best_f1:
-            best_f1 = f1
-            best_thresh = thresh
-
-    # Also find threshold for precision >= 85%
-    best_recall_at_prec85 = 0
-    thresh_at_prec85 = 0.5
-    for thresh in np.arange(0.1, 0.9, 0.01):
-        preds = (y_prob >= thresh).astype(int)
+            best_f1, best_thresh = f1, thresh
         p = precision_score(y_eval, preds, zero_division=0)
         r = recall_score(y_eval, preds)
         if p >= 0.85 and r > best_recall_at_prec85:
-            best_recall_at_prec85 = r
-            thresh_at_prec85 = thresh
+            best_recall_at_prec85, thresh_at_prec85 = r, thresh
 
     print(f"Best F1 threshold: {best_thresh:.2f} (F1={best_f1:.3f})")
-    preds = (y_prob >= best_thresh).astype(int)
+    preds = (deployed_risk(best_thresh) >= _META_THRESHOLD).astype(int)
     print(f"  Precision: {precision_score(y_eval, preds):.3f}")
     print(f"  Recall: {recall_score(y_eval, preds):.3f}")
     print()
     print(f"Best recall at precision>=85%: threshold={thresh_at_prec85:.2f}")
-    preds = (y_prob >= thresh_at_prec85).astype(int)
+    preds = (deployed_risk(thresh_at_prec85) >= _META_THRESHOLD).astype(int)
     print(f"  Precision: {precision_score(y_eval, preds):.3f}")
     print(f"  Recall: {recall_score(y_eval, preds):.3f}")
     print(f"  F1: {f1_score(y_eval, preds):.3f}")
 
-    # Export coefficients
-    coefs = clf.coef_[0].tolist()
-    intercept = clf.intercept_[0]
+    # Export coefficients (features pinned to 0 by _fit get an explicit 0.0)
+    coefs = [0.0] * len(FEATURE_NAMES)
+    for idx, coef in zip(active, clf.coef_[0]):
+        coefs[idx] = float(coef)
+    trained_intercept = float(clf.intercept_[0])
+    feature_names = FEATURE_NAMES
 
-    feature_names = [
-        "l1_regex",
-        "l2_classifier",
-        "l3_similarity",
-        "l4_structural",
-        "l5_negative_selection",
-        "max_score",
-        "min_score",
-        "l1_x_l4",
-        "l2_x_l3",
-        "n_above_0.1",
-    ]
+    # fusion.py decides at a fixed 0.50 (_META_THRESHOLD, shared with the gate and
+    # the benchmark), so the chosen threshold is folded into the intercept;
+    # deployed_risk() above already scored it that way.
+    intercept = trained_intercept - float(np.log(best_thresh / (1 - best_thresh)))
+    y_prob_test = deployed_risk(best_thresh)  # what fusion.py's calibration sees at runtime
 
     print()
     print("=== Learned Coefficients ===")
     for name, coef in zip(feature_names, coefs):
         print(f"  {name:20s}: {coef:+.4f}")
-    print(f"  {'intercept':20s}: {intercept:+.4f}")
+    print(
+        f"  {'intercept':20s}: {intercept:+.4f}  (trained {trained_intercept:+.4f}, threshold {best_thresh:.2f} folded in)"
+    )
 
     # === Isotonic Calibration on held-out test set ===
     from sklearn.isotonic import IsotonicRegression
@@ -203,6 +245,7 @@ def train_fusion(scores_path: Path, holdout_ratio: float = 0.3) -> None:
     export = {
         "coefficients": coefs,
         "intercept": intercept,
+        "trained_intercept": trained_intercept,
         "feature_names": feature_names,
         "optimal_threshold": best_thresh,
         "threshold_at_prec85": thresh_at_prec85,
@@ -226,5 +269,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--scores", type=Path, default=DEFAULT_SCORES)
+    parser.add_argument(
+        "--allow-negative", action="store_true", help="Keep negative coefficients (fusion.py does not accept them)"
+    )
     args = parser.parse_args()
-    train_fusion(args.scores)
+    train_fusion(args.scores, allow_negative=args.allow_negative)

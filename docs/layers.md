@@ -30,14 +30,14 @@ Features:
 
 ## L2 — DeBERTa Classifier
 
-**Latency:** 3-7ms | **Dependencies:** onnxruntime
+**Latency:** ~18ms median, ~55ms p95 (prompts up to 150 words, 2 threads, Apple M4) | **Dependencies:** onnxruntime
 
-DeBERTa-v3-xsmall (22M params) fine-tuned for prompt injection classification. Runs via ONNX Runtime on CPU.
+[`protectai/deberta-v3-base-prompt-injection-v2`](https://huggingface.co/protectai/deberta-v3-base-prompt-injection-v2) (DeBERTa-v3-base, 184M params, Apache-2.0, fine-tuned by Protect AI), run via ONNX Runtime on CPU. Weights are stored as FP16 and cast to FP32 when the session loads, so scores match the upstream FP32 model on x86 and ARM alike; dynamic INT8 did not (98.5% agreement with FP32 on Apple Silicon, 94% on x86).
 
-- Auto-downloads from HuggingFace Hub on first use (83MB, pinned by commit SHA)
-- Score calibration: raw model output (0.23-0.78 range) stretched to 0.0-1.0
-- Falls back to keyword heuristic if ONNX model is not available
-- Strong signal in the meta-classifier (high positive coefficient)
+- Auto-downloads on first use from [`prompt-armor/l2-deberta-onnx`](https://huggingface.co/prompt-armor/l2-deberta-onnx) (~400MB, pinned by commit SHA). The project hosts its own copy: 0.9.1 depended on a third-party repo that was withdrawn (see CHANGELOG 0.9.2). Rebuild it with `scripts/export_l2_model.py`.
+- No score stretch: the model's P(injection) already spans 0-1 (benign median ~0.00; attacks bimodal near 0 or 1)
+- Upstream scope: English prompt injection. It does not target jailbreaks or non-English text — L1 (multilingual rules) and L3 cover those
+- Falls back to a keyword heuristic if the model cannot be loaded; that state is logged, exposed as `LiteEngine.degraded_layers`, fails `tests/unit/test_l2_classifier.py`, and makes the benchmark refuse to report numbers
 
 ## L3 — Semantic Similarity (Contrastive)
 

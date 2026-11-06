@@ -39,6 +39,9 @@ def dump_scores(output_path: Path) -> None:
         sys.stdout = old_stdout
 
     print(f"Active layers: {engine.active_layers}")
+    if engine.degraded_layers:
+        engine.close()
+        sys.exit(f"Refusing to dump training scores: degraded layers {engine.degraded_layers} (fallback scores, not the shipped models).")
 
     samples: list[dict] = []
 
