@@ -52,6 +52,8 @@ result.latency_ms   # 12.4
 | License | **Apache 2.0** | MIT | Apache 2.0 | Proprietary | Apache 2.0 |
 | Status | **Active** | Active (Palo Alto) | Active (NVIDIA) | Active (Check Point) | Dead |
 
+<sub>Competitor latencies are indicative, not measured by us.</sub>
+
 <details>
 <summary><strong>The problem with other approaches</strong></summary>
 
@@ -74,11 +76,11 @@ result.latency_ms   # 12.4
                  │    DeBERTa-v3 ONNX              │
 INPUT ── PRE ────┤                                 ├─── META-CLASSIFIER ─── GATE ─── OUTPUT
                  ├─── L3 Similarity    (<15ms) ───┤         ▲               │
-                 │    contrastive FAISS (25K)      │         │               ├─ ALLOW
+                 │    contrastive FAISS (1.5K)     │         │               ├─ ALLOW
                  │                                 │         │               ├─ WARN
                  ├─── L4 Structural    (<2ms)  ───┤         │               ├─ BLOCK
                  │    boundary, entropy, Cialdini   │         │               └─ → Council?
-                 │                                 │    Threshold jitter         (LLM judge)
+                 │                                 │    Optional jitter          (LLM judge)
                  └─── L5 NegSelection  (<1ms)  ───┘    + inflammation cascade
                       anomaly detection (IsolationForest)
 ```
@@ -87,13 +89,13 @@ INPUT ── PRE ────┤                                 ├─── ME
 
 - **L1 Regex** — fast pattern matching with contextual modifiers. Catches "ignore previous instructions" and 40+ known patterns. Understands quotes and educational context.
 - **L2 Classifier** — DeBERTa-v3-xsmall (22M params) via ONNX Runtime. Understands semantic intent — catches subtle and indirect attacks that regex can't see.
-- **L3 Similarity** — contrastive fine-tuned embeddings + FAISS IVF cosine similarity against 25,160 known attacks. Matches by *intent*, not topic — won't false-positive on security discussions.
+- **L3 Similarity** — contrastive fine-tuned embeddings + exact FAISS cosine search against 1,509 curated known attacks (deduplicated from 25,160 raw entries). Matches by *intent*, not topic — so security discussions are far less likely to false-positive.
 - **L4 Structural** — analyzes structure, not content. Instruction-data boundary detection, manipulation stack (Cialdini's 6 principles), Shannon entropy, delimiter injection, encoding tricks.
 - **L5 Negative Selection** — learns what "normal" prompts look like via Isolation Forest trained on 5,000 benign prompts. Flags anomalous text patterns that don't match any known attack but deviate from normal.
 
 **Fusion** uses a trained logistic regression meta-classifier with:
-- **Threshold jitter** — per-request randomization prevents adversarial threshold optimization
-- **Inflammation cascade** — session-level threat awareness catches iterative probing attacks
+- **Deterministic decisions by default** — the same input always gets the same decision. Optional threshold jitter (`thresholds.jitter_sigma`) only ever *lowers* the threshold, so it can make blocking stricter but never turn a WARN/BLOCK into an ALLOW
+- **Inflammation cascade** — per-session threat awareness (keyed by `session_id`, stateless by default) catches iterative probing attacks
 
 **Council** (optional) — when the engine is uncertain, a local LLM (Phi-3-mini via ollama) provides a second opinion with veto power.
 
@@ -244,8 +246,8 @@ We report **two numbers** — the harder internal benchmark and the same-distrib
 | Metric | Value | Notes |
 |--------|-------|-------|
 | **F1 Score** | **84.4%** | Canonical headline metric |
-| **Precision** | 94.5% | 26 false positives |
-| **Recall** | 76.3% | ~1 in 5 attacks miss (model is precision-leaning) |
+| **Precision** | 94.5% | 25 false positives out of 969 benign |
+| **Recall** | 76.3% | 134 of 565 attacks pass, ~1 in 4 (model is precision-leaning) |
 | **Avg Latency** | ~24ms | Warm. First call adds a one-time model load + FAISS index build, cached after the first run |
 
 > **Honesty note — leakage audited, not asserted.** The shipped fusion thresholds/coefficients are tuned on this benchmark, so 84.4% is an *in-sample* number. We measured the honest out-of-sample counterpart with [`scripts/eval_holdout.py`](scripts/eval_holdout.py): a **cluster-aware 70/30 split** (no held-out attack shares a near-duplicate with train) with the decision **threshold selected on train only**, averaged over 10 splits → **85.5% ± 1.2%**, statistically indistinguishable from the in-sample figure. So the benchmark is **not materially leakage-inflated**. On attacks with *no* near-duplicate in the L3 index (the zero-day case), recall holds at **81%**; benchmark↔attack-DB overlap is ~1.9% (guarded by `tests/test_no_leakage.py`). Reproduce: `python scripts/eval_holdout.py`.
@@ -398,13 +400,13 @@ prompt-armor/
 │   ├── council.py            # Optional LLM judge (ollama)
 │   ├── data/
 │   │   ├── rules/           # L1 regex rules (YAML)
-│   │   └── attacks/         # L3 attack DB (25,160 entries)
+│   │   └── attacks/         # L3 attack DB (1,509 curated; 25,160 raw)
 │   ├── cli/                 # Click + Rich CLI
 │   └── mcp/                 # MCP server (Python SDK)
 └── tests/
     ├── unit/                # Unit tests
     ├── integration/         # Integration tests
-    └── benchmark/           # 515-sample benchmark dataset
+    └── benchmark/           # 1,534-sample benchmark dataset
 ```
 
 **Design decisions:**
@@ -424,6 +426,7 @@ prompt-armor/
 - [x] **v0.6** — L3 ONNX (no PyTorch), adversarial test suite
 - [x] **v0.7** — L3 FP reduction (precision +6.8%), corroborated hard block, L5 recalibration
 - [x] **v0.8** — L3 contrastive retrain with 2.4K hard negatives, unicode hardening, attack DB curation
+- [x] **v0.9** — Honest-metrics pass: per-session isolation, deterministic decisions, out-of-sample validation, ML layers in the base install
 - [ ] **v1.0** — Production-ready with <0.1% FPR target, multi-judge council (OpenRouter)
 - [ ] **Cloud** — Managed API, dashboard, threat intel feed, continuously updated models
 
