@@ -1,24 +1,36 @@
 """L2 — Sequence classifier layer.
 
-Uses a DistilBERT model (ONNX Runtime) fine-tuned for prompt injection
-classification. Falls back to a heuristic TF-IDF-like approach if no
-ONNX model is available.
+Uses ProtectAI's DeBERTa-v3 prompt injection classifier
+(``protectai/deberta-v3-base-prompt-injection-v2``, Apache-2.0), quantized to
+INT8 ONNX and hosted at ``prompt-armor/l2-deberta-onnx``. Falls back to a
+keyword heuristic if the model cannot be loaded; that fallback is logged and
+reported via ``degraded``, because the fusion meta-classifier is trained on the
+real model's scores.
 
-Requires: onnxruntime, tokenizers (or transformers for model loading)
+Requires: onnxruntime, tokenizers
 """
 
 from __future__ import annotations
 
+import logging
 import time
 from pathlib import Path
 
 import numpy as np
 
 from prompt_armor.config import ShieldConfig
-from prompt_armor.layers.base import BaseLayer
+from prompt_armor.layers.base import BaseLayer, onnx_session_options
 from prompt_armor.models import Category, Evidence, LayerResult
 
-_DEFAULT_MODEL_DIR = Path(__file__).parent.parent / "data" / "models"
+logger = logging.getLogger("prompt_armor")
+
+# Own directory, not the old data/models/classifier.onnx: v0.9.1 downloaded a
+# different model to that path, and pip upgrades leave downloaded files behind.
+# A fresh directory guarantees an upgraded install never pairs the old model
+# with the new calibration and fusion coefficients.
+_DEFAULT_MODEL_DIR = Path(__file__).parent.parent / "data" / "models" / "l2-deberta-onnx"
+_MODEL_FILE = "model_quant.onnx"
+_TOKENIZER_FILE = "tokenizer.json"
 
 # Heuristic classifier keywords (used when no ONNX model is available)
 _INJECTION_KEYWORDS = {
@@ -67,69 +79,76 @@ class L2ClassifierLayer(BaseLayer):
 
     name = "l2_classifier"
 
+    # Pinned model revision for supply chain security
+    _MODEL_ID = "prompt-armor/l2-deberta-onnx"
+    _MODEL_REVISION = "513e0a99724dd6a95b37d9ba9608da1e10ed2b2b"
+
     def __init__(self, config: ShieldConfig | None = None) -> None:
         self._config = config or ShieldConfig()
         self._onnx_session = None
         self._tokenizer = None
         self._use_heuristic = True
 
+    @property
+    def degraded(self) -> bool:
+        return self._use_heuristic
+
     def setup(self) -> None:
-        """Load ONNX model, downloading if needed. Falls back to heuristic."""
-        model_path = _DEFAULT_MODEL_DIR / "classifier.onnx"
-        tokenizer_path = _DEFAULT_MODEL_DIR / "tokenizer.json"
+        """Load the ONNX model, downloading it if needed. Falls back to heuristic."""
+        files = self._resolve_model_files()
+        if files is None:
+            logger.warning("L2: classifier model unavailable, using the keyword heuristic (degraded)")
+            return
 
-        # Auto-download if model not present
-        if not model_path.is_file():
-            self._try_download_model(model_path, tokenizer_path)
-
-        if model_path.is_file():
-            try:
-                import onnxruntime as ort
-
-                self._onnx_session = ort.InferenceSession(
-                    str(model_path),
-                    providers=["CPUExecutionProvider"],
-                )
-
-                if tokenizer_path.is_file():
-                    from tokenizers import Tokenizer
-
-                    self._tokenizer = Tokenizer.from_file(str(tokenizer_path))
-                    self._tokenizer.enable_padding(pad_id=0, pad_token="[PAD]")
-                    self._tokenizer.enable_truncation(max_length=512)
-                    self._use_heuristic = False
-            except Exception:
-                self._use_heuristic = True
-
-    # Pinned model revision for supply chain security
-    _MODEL_ID = "aldenb/scout-prompt-injection-classifier-22m"
-    _MODEL_REVISION = "1b28ceb546c0a79de8f590cde6882fe75c203ede"
-
-    @staticmethod
-    def _try_download_model(model_path: Path, tokenizer_path: Path) -> None:
-        """Download the ONNX model from HuggingFace Hub on first use."""
+        model_path, tokenizer_path = files
         try:
-            import logging
-            import shutil
+            import onnxruntime as ort
+            from tokenizers import Tokenizer
 
-            from huggingface_hub import hf_hub_download
-
-            logger = logging.getLogger("prompt_armor")
-            logger.info("Downloading L2 classifier model (83MB, one-time)...")
-
-            model_id = L2ClassifierLayer._MODEL_ID
-            revision = L2ClassifierLayer._MODEL_REVISION
-            model_path.parent.mkdir(parents=True, exist_ok=True)
-
-            onnx = hf_hub_download(model_id, "onnx/model_quant.onnx", revision=revision)
-            shutil.copy2(onnx, model_path)
-
-            tok = hf_hub_download(model_id, "tokenizer.json", revision=revision)
-            shutil.copy2(tok, tokenizer_path)
-
-            logger.info("Model downloaded successfully.")
+            self._onnx_session = ort.InferenceSession(
+                str(model_path), onnx_session_options(), providers=["CPUExecutionProvider"]
+            )
+            self._tokenizer = Tokenizer.from_file(str(tokenizer_path))
+            self._tokenizer.enable_padding(pad_id=0, pad_token="[PAD]")
+            self._tokenizer.enable_truncation(max_length=512)
+            self._use_heuristic = False
         except Exception as e:
-            logging.getLogger("prompt_armor").warning("Model download failed: %s", e)
+            logger.warning("L2: failed to load classifier model (%s), using the keyword heuristic (degraded)", e)
+            self._use_heuristic = True
+
+    @classmethod
+    def _resolve_model_files(cls, model_dir: Path = _DEFAULT_MODEL_DIR) -> tuple[Path, Path] | None:
+        """Return (model, tokenizer) paths, downloading from the Hub on first use.
+
+        Prefers the package data dir (where air-gapped installs can also drop the
+        files by hand); if that is not writable, falls back to the HF cache.
+        """
+        model_path = model_dir / _MODEL_FILE
+        tokenizer_path = model_dir / _TOKENIZER_FILE
+        if model_path.is_file() and tokenizer_path.is_file():
+            return model_path, tokenizer_path
+
+        try:
+            from huggingface_hub import hf_hub_download
+        except ImportError:
+            return None
+
+        logger.info("L2: downloading classifier model from %s (~233MB, one-time)...", cls._MODEL_ID)
+        for local_dir in (model_dir, None):
+            kwargs = {"revision": cls._MODEL_REVISION}
+            try:
+                if local_dir is not None:
+                    local_dir.mkdir(parents=True, exist_ok=True)
+                    kwargs["local_dir"] = str(local_dir)
+                model = hf_hub_download(cls._MODEL_ID, _MODEL_FILE, **kwargs)
+                tokenizer = hf_hub_download(cls._MODEL_ID, _TOKENIZER_FILE, **kwargs)
+                return Path(model), Path(tokenizer)
+            except PermissionError as e:
+                logger.info("L2: %s is not writable (%s), downloading to the Hugging Face cache", local_dir, e)
+            except Exception as e:
+                logger.warning("L2: model download failed: %s", e)
+                break
+        return None
 
     def analyze(self, text: str) -> LayerResult:
         """Classify prompt as malicious or benign."""
@@ -227,17 +246,15 @@ class L2ClassifierLayer(BaseLayer):
         exp_logits = np.exp(logits - np.max(logits))
         probs = exp_logits / exp_logits.sum()
 
-        # Raw probability of injection class
+        # Raw probability of the INJECTION class (label 1)
         raw_prob = float(probs[1]) if len(probs) > 1 else float(probs[0])
 
-        # Calibrate: stretch the model's effective range to 0.0-1.0
-        # Scout-22m outputs ~0.23 for benign and ~0.78 for attacks.
-        # Without calibration, the fusion layer sees compressed scores that
-        # underweight L2 relative to L1/L3/L4 which use the full 0-1 range.
-        score_floor = 0.23  # typical benign score
-        score_ceil = 0.78  # typical attack score
-        calibrated = (raw_prob - score_floor) / (score_ceil - score_floor)
-        calibrated = max(0.0, min(1.0, calibrated))
+        # No range stretch: unlike the v0.9.1 model (which compressed its output
+        # to ~0.23 benign / ~0.78 attack), this model already spans 0-1 — on the
+        # 1,534-sample benchmark, benign median ~0.00 and attacks are bimodal
+        # (~0.00 or ~1.00). The fusion meta-classifier is retrained on these
+        # scores, so the raw probability is used as-is.
+        calibrated = max(0.0, min(1.0, raw_prob))
 
         # Evidence threshold on calibrated score
         evidence = []
