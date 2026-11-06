@@ -9,11 +9,11 @@
 - **~24ms latency (warm)** — fast enough for real-time API integration
 - **Fully offline** — no API keys, no LLM dependency, no network calls during analysis
 - **Multilingual** — EN, DE, ES, FR, PT regex rules + multilingual embeddings
-- **Session awareness** — inflammation cascade catches iterative probing attacks
+- **Session awareness** — per-session inflammation cascade (keyed by `session_id`) catches iterative probing attacks
 - **Council mode** — optional LLM judge (ollama) for uncertain cases
 - **MCP Server** — native integration with Claude Desktop and other MCP clients
 - **CI-friendly CLI** — semantic exit codes (0=allow, 1=warn, 2=block)
-- **Security hardened** — threshold jitter, per-layer timeout, fail-open, Unicode normalization, supply chain pinning
+- **Security hardened** — deterministic decisions (optional downward-only jitter), per-layer timeout, fail-open, Unicode normalization, supply chain pinning
 
 ## Install
 

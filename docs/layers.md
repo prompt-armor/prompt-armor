@@ -3,7 +3,7 @@
 prompt-armor uses 5 analysis layers that run **in parallel**, combined by a trained meta-classifier. An optional Council (LLM judge) handles uncertain cases.
 
 ```
-INPUT → NORMALIZE → SEGMENT → [L1 | L2 | L3 | L4 | L5] → META-CLASSIFIER → DECISION (+jitter)
+INPUT → NORMALIZE → SEGMENT → [L1 | L2 | L3 | L4 | L5] → META-CLASSIFIER → DECISION (+optional jitter)
                                                                  ↑                 │
                                                          inflammation cascade      └─→ Council? (LLM)
 ```
@@ -99,7 +99,7 @@ A trained logistic regression model combines layer scores with interaction featu
 - **L2 × L3 interaction** is powerful — when both DeBERTa and contrastive similarity agree
 - **Number of agreeing layers** is a strong signal
 - Negative coefficients are clamped to 0 to prevent adversarial exploitation
-- **Threshold jitter** (σ=0.03) randomizes the decision boundary per-request
+- **Deterministic by default** — threshold jitter is off (`jitter_sigma: 0.0`); when enabled it only *lowers* the threshold, so it can never turn a WARN/BLOCK into an ALLOW
 
 **Output:** Risk score (0.0-1.0) via sigmoid, thresholded into ALLOW / WARN / BLOCK.
 
@@ -131,7 +131,7 @@ When a WARN or BLOCK decision occurs, the engine temporarily increases sensitivi
 - Inflammation boost proportional to risk score (capped at 0.15)
 - Exponential decay (×0.7 per request) — doesn't permanently bias
 - Catches iterative probing attacks where attackers send progressively aggressive prompts
-- `engine.reset_session()` clears inflammation for new sessions
+- State is keyed by an explicit `session_id` (`analyze(text, session_id=...)`); without one the call is stateless, so inflammation never crosses sessions or tenants. `engine.reset_session(session_id)` clears one session (no argument clears all)
 
 ## Fail-Open Design
 
