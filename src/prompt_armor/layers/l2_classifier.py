@@ -1,8 +1,10 @@
 """L2 — Sequence classifier layer.
 
 Uses ProtectAI's DeBERTa-v3 prompt injection classifier
-(``protectai/deberta-v3-base-prompt-injection-v2``, Apache-2.0), quantized to
-INT8 ONNX and hosted at ``prompt-armor/l2-deberta-onnx``. Falls back to a
+(``protectai/deberta-v3-base-prompt-injection-v2``, Apache-2.0) as ONNX with FP16
+weights that ONNX Runtime casts to FP32 at load, so scores match the upstream
+model on any CPU (dynamic INT8 did not: x86 and ARM disagreed). Hosted at
+``prompt-armor/l2-deberta-onnx``. Falls back to a
 keyword heuristic if the model cannot be loaded; that fallback is logged and
 reported via ``degraded``, because the fusion meta-classifier is trained on the
 real model's scores.
@@ -29,7 +31,7 @@ logger = logging.getLogger("prompt_armor")
 # A fresh directory guarantees an upgraded install never pairs the old model
 # with the new calibration and fusion coefficients.
 _DEFAULT_MODEL_DIR = Path(__file__).parent.parent / "data" / "models" / "l2-deberta-onnx"
-_MODEL_FILE = "model_quant.onnx"
+_MODEL_FILE = "model_fp16.onnx"
 _TOKENIZER_FILE = "tokenizer.json"
 
 # Heuristic classifier keywords (used when no ONNX model is available)
@@ -81,7 +83,7 @@ class L2ClassifierLayer(BaseLayer):
 
     # Pinned model revision for supply chain security
     _MODEL_ID = "prompt-armor/l2-deberta-onnx"
-    _MODEL_REVISION = "513e0a99724dd6a95b37d9ba9608da1e10ed2b2b"
+    _MODEL_REVISION = "e723caa5a7d3fe21cebed67761b67cc7e3744723"
 
     def __init__(self, config: ShieldConfig | None = None) -> None:
         self._config = config or ShieldConfig()
@@ -106,7 +108,7 @@ class L2ClassifierLayer(BaseLayer):
             from tokenizers import Tokenizer
 
             self._onnx_session = ort.InferenceSession(
-                str(model_path), onnx_session_options(), providers=["CPUExecutionProvider"]
+                str(model_path), onnx_session_options(threads=2), providers=["CPUExecutionProvider"]
             )
             self._tokenizer = Tokenizer.from_file(str(tokenizer_path))
             self._tokenizer.enable_padding(pad_id=0, pad_token="[PAD]")
@@ -133,7 +135,7 @@ class L2ClassifierLayer(BaseLayer):
         except ImportError:
             return None
 
-        logger.info("L2: downloading classifier model from %s (~233MB, one-time)...", cls._MODEL_ID)
+        logger.info("L2: downloading classifier model from %s (~400MB, one-time)...", cls._MODEL_ID)
         for local_dir in (model_dir, None):
             kwargs = {"revision": cls._MODEL_REVISION}
             try:
