@@ -34,6 +34,10 @@ class BaseLayer(ABC):
     """
 
     name: str = "base"
+    # Run on the calling thread before the parallel layers are dispatched,
+    # instead of in the pool. For cheap, GIL-bound layers whose own time budget
+    # must not compete with the ONNX layers for CPU (see L1RegexLayer).
+    run_first: bool = False
 
     @property
     def degraded(self) -> bool:

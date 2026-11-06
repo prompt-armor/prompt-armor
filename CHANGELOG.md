@@ -4,6 +4,16 @@ All notable changes to prompt-armor will be documented in this file.
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-11-06
+
+Patch release: results no longer depend on machine load, and the benchmark's small CPU-type variance is disclosed. No API or model changes.
+
+### Fixed
+- **L1 runs before the ONNX layers.** L1 bounds each regex search with a 0.1s wall-clock ReDoS budget; run in parallel with L2/L3 on a loaded 4-vCPU machine, searches that normally take ~1ms blew it and skipped rules (21–34 per benchmark run on GitHub's slower runners after the 0.9.2 release). Layers can now set `run_first` to execute on the calling thread before the pool dispatch; L1 does, at a cost of ~1ms. Zero skipped rules in every CI run since.
+
+### Changed
+- **Documented that the benchmark varies slightly by CPU type.** L3's embedding model is still dynamic INT8, which rounds differently across instruction sets: GitHub's runners score F1 82.9% or 82.5% depending on which CPU they get, Apple M4 83.1%. L2 already computes in FP32 and is identical everywhere; moving L3 the same way needs an index rebuild and a fusion retrain.
+
 ## [0.9.2] - 2026-11-06
 
 Fix release: the L2 classifier model that 0.9.1 downloaded on first use was withdrawn from Hugging Face, so every fresh install had been running L2 on its keyword fallback without anything failing. L2 now uses Protect AI's openly licensed DeBERTa-v3-base model from a copy the project hosts itself, the fusion meta-classifier is retrained on it, every published number is re-measured, results no longer depend on CPU type or load, and a degraded layer can no longer pass CI silently. No API changes.
