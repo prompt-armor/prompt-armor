@@ -39,7 +39,9 @@ _LIVE_FILES = [
 # deliberately cited alongside the in-sample 84.4% to prove it is not
 # leakage-inflated. 84.4% / 98.87% remain THE headline (enforced present below).
 _HEADLINE_F1 = {"84.4", "98.87"}
-_CANONICAL_F1 = _HEADLINE_F1 | {"85.5"}
+# Temporary: 56.3 is the degraded fresh-install figure cited in the README's
+# L2-withdrawal notice. Remove it together with the notice in v0.9.2.
+_CANONICAL_F1 = _HEADLINE_F1 | {"85.5", "56.3"}
 
 # Stale headline latencies that the reconciliation removed. (Competitor latencies
 # like ~50ms / ~100ms in the comparison table are fine — hence a denylist, not an

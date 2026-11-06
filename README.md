@@ -14,6 +14,9 @@
 
 ---
 
+> [!WARNING]
+> **Known issue (2026-11-06): the L2 classifier is unavailable on fresh installs.** The third-party model that L2 downloads on first use (`aldenb/scout-prompt-injection-classifier-22m`) was withdrawn from Hugging Face. On a fresh install of v0.9.1, L2 falls back to a keyword heuristic after a one-line download warning, and our CI benchmark measures F1 56.3% in that state instead of 84.4%. Installs that already cached the model are unaffected. v0.9.2 will replace L2 with an openly licensed model, retrain the fusion layer and re-measure every published number.
+
 Most LLM security tools either need an LLM to work (circular dependency), cost money per request, or return a useless binary "safe/unsafe" with no explanation.
 
 **prompt-armor** runs 5 analysis layers in parallel, fuses their scores via a trained meta-classifier, and tells you *exactly* what was detected, with evidence and confidence — in ~24ms, offline, for free.
