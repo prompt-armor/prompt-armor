@@ -4,6 +4,10 @@ All notable changes to prompt-armor will be documented in this file.
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-11-06
+
+Patch release: results no longer depend on machine load, and the benchmark's small CPU-type variance is disclosed. No API or model changes.
+
 ### Fixed
 - **L1 runs before the ONNX layers.** L1 bounds each regex search with a 0.1s wall-clock ReDoS budget; run in parallel with L2/L3 on a loaded 4-vCPU machine, searches that normally take ~1ms blew it and skipped rules (21–34 per benchmark run on GitHub's slower runners after the 0.9.2 release). Layers can now set `run_first` to execute on the calling thread before the pool dispatch; L1 does, at a cost of ~1ms. Zero skipped rules in every CI run since.
 
