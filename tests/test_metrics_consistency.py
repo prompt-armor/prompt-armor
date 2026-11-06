@@ -6,9 +6,9 @@ surfaces only — NOT the CHANGELOG or the dated blog post (legitimate historica
 records) and NOT docs/layers.md (per-layer technical latencies).
 
 Canonical framing (decided 2026-06, re-measured for 0.9.2 after the L2 model
-swap): F1 82.7% internal (1,534-sample) / 98.37% external (jayavibhav,
-same-distribution). Latency ~47ms warm average. The out-of-sample validation
-figure (84.1%, scripts/eval_holdout.py) is also allowed.
+swap): F1 83.1% internal (1,534-sample) / 98.22% external (jayavibhav,
+same-distribution). Latency ~50ms warm average. The out-of-sample validation
+figure (84.2%, scripts/eval_holdout.py) is also allowed.
 """
 
 from __future__ import annotations
@@ -39,18 +39,18 @@ _LIVE_FILES = [
 
 # F1 figures allowed in live surfaces: the two canonical headline numbers plus
 # the out-of-sample validation figure (held-out F1, scripts/eval_holdout.py),
-# deliberately cited alongside the in-sample 82.7% to prove it is not
-# leakage-inflated. 82.7% / 98.37% remain THE headline (enforced present below).
+# deliberately cited alongside the in-sample 83.1% to prove it is not
+# leakage-inflated. 83.1% / 98.22% remain THE headline (enforced present below).
 # Superseded figures (84.4 / 85.5 / 98.87 from the withdrawn 0.9.1 L2 model, and
 # 56.3 from its keyword fallback) belong in the CHANGELOG only.
-_HEADLINE_F1 = {"82.7", "98.37"}
-# 78.8 is the in-sample F1 without the 119 attacks whose source dataset is in the
+_HEADLINE_F1 = {"83.1", "98.22"}
+# 79.2 is the in-sample F1 without the 119 attacks whose source dataset is in the
 # L2 model's training data, disclosed next to the headline (README, docs/benchmark.md).
-_CANONICAL_F1 = _HEADLINE_F1 | {"84.1", "78.8"}
+_CANONICAL_F1 = _HEADLINE_F1 | {"84.2", "79.2"}
 
 # Stale headline latencies that the reconciliation removed. (Competitor latencies
 # like ~50ms / ~100ms in the comparison table are fine — hence a denylist, not an
-# "everything must be 47ms" allowlist.)
+# "everything must be 50ms" allowlist.)
 _STALE_LATENCY = ["~21ms", "~24ms", "~27ms", "~20ms", "~30ms"]
 
 # F1-labelled percentage, prefix ("F1 ... 86.9%") or suffix ("91.7% F1") form.
@@ -71,7 +71,7 @@ def test_f1_claims_are_canonical(path):
     bad = sorted({n for n in found if n not in _CANONICAL_F1})
     assert not bad, (
         f"{path.relative_to(_ROOT)} cites non-canonical F1 {bad}. "
-        f"Use only {sorted(_CANONICAL_F1)} (82.7% in-sample / 98.37% external / 84.1% held-out / 78.8% overlap-excluded)."
+        f"Use only {sorted(_CANONICAL_F1)} (83.1% in-sample / 98.22% external / 84.2% held-out / 79.2% overlap-excluded)."
     )
 
 
@@ -79,10 +79,10 @@ def test_f1_claims_are_canonical(path):
 def test_no_stale_headline_latency(path):
     text = path.read_text()
     present = [s for s in _STALE_LATENCY if s in text]
-    assert not present, f"{path.relative_to(_ROOT)} cites stale latency {present}; the canonical warm latency is ~47ms."
+    assert not present, f"{path.relative_to(_ROOT)} cites stale latency {present}; the canonical warm latency is ~50ms."
 
 
 def test_canonical_numbers_are_actually_present():
     """Sanity: the README must contain both canonical F1 figures (guards a typo'd allowlist)."""
     readme = (_ROOT / "README.md").read_text()
-    assert "82.7%" in readme and "98.37%" in readme
+    assert "83.1%" in readme and "98.22%" in readme

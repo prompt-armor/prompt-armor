@@ -10,7 +10,7 @@ pip install prompt-armor
 pip install "prompt-armor[mcp]"
 ```
 
-The L2 DeBERTa classifier model (~233MB) auto-downloads from HuggingFace on first use. No manual setup needed.
+The L2 DeBERTa classifier model (~400MB) auto-downloads from HuggingFace on first use. No manual setup needed.
 
 ## Python API
 
@@ -72,4 +72,4 @@ The server exposes an `analyze_prompt` tool that returns the full analysis resul
 
 ## First run
 
-All five layers ship with the base install. The first `analyze()` downloads the L2 DeBERTa classifier (~233MB) plus the smaller L3 and L5 models from HuggingFace and loads the bundled L3 index — a one-time cost that depends on your connection. Every call after that is ~47ms warm on average (median ~17ms) and fully offline; that first-run download is the only network access prompt-armor makes.
+All five layers ship with the base install. The first `analyze()` downloads the L2 DeBERTa classifier (~400MB) plus the smaller L3 and L5 models from HuggingFace and loads the bundled L3 index — a one-time cost that depends on your connection. Every call after that is ~50ms warm on average (median ~19ms) and fully offline; that first-run download is the only network access prompt-armor makes.

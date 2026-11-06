@@ -4,21 +4,24 @@ All notable changes to prompt-armor will be documented in this file.
 
 ## [Unreleased]
 
-Fix release: the L2 classifier model that 0.9.1 downloaded on first use was withdrawn from Hugging Face, so every fresh install had been running L2 on its keyword fallback without anything failing. L2 now uses Protect AI's openly licensed DeBERTa-v3-base model from a copy the project hosts itself, the fusion meta-classifier is retrained on it, every published number is re-measured, and a degraded layer can no longer pass CI silently. No API changes.
+Fix release: the L2 classifier model that 0.9.1 downloaded on first use was withdrawn from Hugging Face, so every fresh install had been running L2 on its keyword fallback without anything failing. L2 now uses Protect AI's openly licensed DeBERTa-v3-base model from a copy the project hosts itself, the fusion meta-classifier is retrained on it, every published number is re-measured, results no longer depend on CPU type or load, and a degraded layer can no longer pass CI silently. No API changes.
 
 ### What happened
 - 0.9.1's L2 downloaded `aldenb/scout-prompt-injection-classifier-22m` from a third-party Hugging Face account, pinned to a commit. That repository was withdrawn (HTTP 401; the account now lists no public models). A pinned revision protects against a *changed* artifact, not a *vanished* one.
 - On a fresh install, L2 logged one download warning and fell back to its keyword heuristic. Nothing else failed: the engine still listed `l2_classifier` among its active layers, the model-only unit tests skipped, and the CI benchmark ran to completion.
-- The CI `Benchmark` workflow is what exposed it: the run after the 2026-11-06 merge to `main` measured **F1 56.3%** (precision 88.6%, recall 41.2%) instead of 84.4%. Installs that had cached the model earlier were unaffected; any install made after the withdrawal got the degraded engine. 0.9.2 is the fix; there is no workaround for 0.9.1 short of upgrading.
+- The CI `Benchmark` workflow is what exposed it: the run after the 2026-11-06 merge to `main` measured **F1 56.3%** (precision 88.6%, recall 41.2%) instead of 84.4%. Installs that had cached the model earlier were unaffected; any install made after the withdrawal got the degraded engine.
 
 ### Fixed
-- **L2 now runs [`protectai/deberta-v3-base-prompt-injection-v2`](https://huggingface.co/protectai/deberta-v3-base-prompt-injection-v2)** (DeBERTa-v3-base, Apache-2.0, fine-tuned by Protect AI), quantized to INT8 ONNX and hosted at [`prompt-armor/l2-deberta-onnx`](https://huggingface.co/prompt-armor/l2-deberta-onnx), pinned by commit. All three downloaded models (L2, L3, L5) now live in the project's own Hugging Face org; Protect AI has archived the project behind this model, which is one more reason to keep a copy. `scripts/export_l2_model.py` rebuilds the artifact byte for byte from the pinned upstream revision.
-  - Quantization must be per-channel: plain per-tensor dynamic INT8 collapses this model (benchmark AUC 0.92 → 0.65). Per-channel keeps 98.5% decision agreement with FP32 (AUC 0.914) at 233MB instead of 738MB.
-  - The `small` variant was evaluated and not chosen: lower AUC on the benchmark (0.85 vs 0.92 in FP32), and its upstream repository is gated.
+- **L2 now runs [`protectai/deberta-v3-base-prompt-injection-v2`](https://huggingface.co/protectai/deberta-v3-base-prompt-injection-v2)** (DeBERTa-v3-base, 184M parameters, Apache-2.0, fine-tuned by Protect AI), hosted at [`prompt-armor/l2-deberta-onnx`](https://huggingface.co/prompt-armor/l2-deberta-onnx) and pinned by commit. All three downloaded models (L2, L3, L5) now live in the project's own Hugging Face org; Protect AI has archived the project behind this model, one more reason to keep a copy. `scripts/export_l2_model.py` rebuilds the artifact byte for byte from the pinned upstream revision.
+  - Weights are stored as FP16 and cast to FP32 when the session loads (400MB instead of 738MB), so scores match the upstream FP32 model on x86 and ARM alike (99.9% decision agreement on the benchmark, same AUC).
+  - Dynamic INT8 was tried first and rejected: it gave different answers by CPU. Per-channel INT8 agreed with FP32 on 98.5% of the benchmark on Apple Silicon but on 94% on x86, and the CI benchmark (x86) scored F1 79.2% where the Mac scored 82.7% with the same file. The new F1 floor in the `Benchmark` workflow caught it before release.
+  - The `small` variant was evaluated and not chosen: lower AUC on the benchmark (0.85 vs 0.92), and its upstream repository is gated.
   - The model lives in a new directory (`data/models/l2-deberta-onnx/`), so an upgraded install never pairs 0.9.1's cached `classifier.onnx` with the new fusion weights. If the package directory is read-only, the model goes to the Hugging Face cache instead of falling back.
   - No more score stretch: 0.9.1's model compressed its output to ~0.23–0.78 and was rescaled; this one already spans 0–1.
-- **Fusion meta-classifier retrained** on the new L2 scores (`scripts/dump_layer_scores.py` → `scripts/train_fusion.py`). Coefficients are now non-negative by construction: features whose weight comes out negative (L4, L5, min score, L1×L4) are pinned to 0 and the rest refit, instead of being clamped after the fit. The F1-optimal threshold is folded into the intercept, so the decision threshold stays at 0.50.
-- **Results no longer vary from run to run.** L1 matches each regex under a 0.1s wall-clock budget (ReDoS guard), and the L2/L3 ONNX sessions used every core while the engine also ran the layers in parallel, so L1 searches timed out and skipped rules: 78–137 times per benchmark run for 0.9.1 on an Apple M4, 32 times in CI, where two runs of the same code scored 56.3% and 56.46%. ONNX sessions now run single-threaded (`layers.base.onnx_session_options`): zero timeouts on the same benchmark, lower median latency.
+- **Fusion meta-classifier retrained** on the new L2 scores (`scripts/dump_layer_scores.py` → `scripts/train_fusion.py`):
+  - Coefficients are non-negative by construction: features whose weight comes out negative (L4, L5, min score, L1×L4) are pinned to 0 and the rest refit, instead of being clamped after the fit.
+  - The decision threshold is now picked on the function that ships. `train_fusion.py` used to pick it on the raw logistic output, but `fusion.py` then hard-blocks corroborated ≥ 0.95 signals and dampens L3-only risk after the sigmoid; that mismatch cost 3 F1 points with the new L2 (80.2% → 83.1%). The threshold is still chosen on the held-out 30% only, and is folded into the intercept so the runtime threshold stays at 0.50. The two post-processing rules now live in shared functions (`fusion._hard_block`, `fusion._l3_solo_factor`) used by both.
+- **Results no longer vary from run to run.** L1 matches each regex under a 0.1s wall-clock budget (ReDoS guard), and the L2/L3 ONNX sessions used every core while the engine also ran the layers in parallel, so L1 searches timed out and skipped rules: 29–137 times per benchmark run for 0.9.1 on an Apple M4 (one of those runs scored 84.31% instead of 84.43%), 32 in CI (two CI runs of the same code scored 56.3% and 56.46%). ONNX sessions now use fixed small thread counts (L2: 2, L3: 1; `layers.base.onnx_session_options`): zero skipped rules on a quiet machine.
 
 ### Added
 - **A degraded layer is now loud.** `BaseLayer.degraded` and `LiteEngine.degraded_layers` report layers running a fallback, and the engine logs a warning at startup. `tests/unit/test_l2_classifier.py::TestL2ModelLoaded` and `tests/unit/test_engine.py::test_no_layer_is_degraded` fail when L2 is on the heuristic; `test_model_integrity.py` checks that L2 is pinned and comes from the project's own org. `run_benchmark.py`, `dump_layer_scores.py` and `eval_holdout.py` refuse to produce numbers from a degraded or incomplete engine (`--allow-degraded` overrides), and the `Benchmark` workflow fails if F1 drops more than a point below the published figure (`--min-f1`). The workflow now also runs on pull requests, so a release PR shows its number before it merges.
@@ -28,15 +31,16 @@ These replace the 0.9.1 figures everywhere (`tests/test_metrics_consistency.py` 
 
 | | 0.9.1, model cached | 0.9.1, fresh install | **0.9.2** |
 |---|---|---|---|
-| Internal F1, in-sample (1,534 samples) | 84.4% (P 94.5%, R 76.3%) | 56.3% (P 88.6%, R 41.2%) | **82.7%** (P 92.4%, R 74.9%) |
-| Out-of-sample F1 (10 cluster splits) | 85.5% ± 1.2% | — | **84.1% ± 1.2%** |
-| External F1 (jayavibhav 1K) | 98.87% | — | **98.37%** |
-| Warm latency, benchmark average | ~24ms published; ~32ms re-measured | — | **~47ms** |
-| Warm latency, median | ~16ms | — | **~17ms** |
+| Internal F1, in-sample (1,534 samples) | 84.4% (P 94.5%, R 76.3%) | 56.3% (P 88.6%, R 41.2%) | **83.1%** (P 90.2%, R 77.0%) |
+| Out-of-sample F1 (10 cluster splits) | 85.5% ± 1.2% | — | **84.2% ± 1.5%** |
+| External F1 (jayavibhav 1K) | 98.87% | — | **98.22%** |
+| Warm latency, benchmark average (Apple M4) | ~24ms published; ~32ms re-measured | — | **~50ms** |
+| Warm latency, median | ~16ms | — | **~19ms** |
 
-- Latency was measured for both versions back to back on the same machine (Apple M4, quiet): the ~24ms published for 0.9.1 did not reproduce there. The average rises because L2 is now a 184M-parameter model (0.9.1's had 22M) and inputs over 150 words run through it up to 11 times (full text plus overlapping windows); the median barely moves.
-- Training-data overlap, stated rather than hidden: Protect AI trained this model on `jackhhao/jailbreak-classification`, the source of 119 of the 565 benchmark attacks. Without those, in-sample F1 is 78.8% (0.9.1 on the same subset: 81.7%).
-- Where 0.9.2 detects less than 0.9.1: JailbreakBench harmful-behavior requests (2 of 100 vs 8 of 100) and the deepset test split (32 of 59 vs 36 of 59); the model's authors note it does not target jailbreaks. It detects more of the hand-crafted encoding and compound attacks (25 of 25 vs 22 of 25).
+- Latency: the ~24ms published for 0.9.1 did not reproduce on the same machine (~32ms quiet). Measured back to back under the same load, 0.9.2's average is about 1.6× 0.9.1's: L2 is now a 184M-parameter model computing in FP32 (0.9.1's had 22M), and inputs over 150 words run through it up to 11 times (full text plus overlapping windows). The median moves less.
+- Precision drops (25 → 47 false positives out of 969 benign) and recall rises (134 → 130 missed attacks out of 565).
+- Training-data overlap, stated rather than hidden: Protect AI trained this model on `jackhhao/jailbreak-classification`, the source of 119 of the 565 benchmark attacks. Without those, in-sample F1 is 79.2% (0.9.1 on the same subset: 81.7%).
+- Where 0.9.2 detects less than 0.9.1: JailbreakBench harmful-behavior requests (6 of 100 vs 8 of 100); the model's authors note it does not target jailbreaks. It detects more of the hand-crafted encoding and compound attacks (25 of 25 vs 22 of 25) and of the deepset test split (37 of 59 vs 36 of 59).
 
 ## [0.9.1] - 2026-06-03
 

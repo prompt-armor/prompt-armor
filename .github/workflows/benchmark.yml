@@ -32,8 +32,8 @@ jobs:
         run: |
           source .venv/bin/activate
           # Fails on a missing/degraded layer (0.9.1's silent L2 fallback) and if F1
-          # drops more than a point below the published figure (82.7% in-sample).
-          python tests/benchmark/run_benchmark.py --output benchmark_results.json --min-f1 0.817
+          # drops more than a point below the published figure (83.1% in-sample).
+          python tests/benchmark/run_benchmark.py --output benchmark_results.json --min-f1 0.821
 
       - name: Upload results
         if: always()

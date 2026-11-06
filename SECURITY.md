@@ -37,7 +37,7 @@ Security issues in the following areas are in scope:
 
 prompt-armor is a defense-in-depth layer, not a complete security solution:
 - Session tracking via inflammation cascade (opt-in, single engine instance)
-- ~47ms average latency (median ~17ms) adds a small overhead to each request
+- ~50ms average latency (median ~19ms) adds a small overhead to each request
 - Council mode sends prompts to local LLM (ollama) — configure `privacy_mode: truncated` for API providers
-- L2 classifier requires a one-time model download (~233MB) for full accuracy; without it L2 runs a keyword fallback and logs a degraded-layer warning
+- L2 classifier requires a one-time model download (~400MB) for full accuracy; without it L2 runs a keyword fallback and logs a degraded-layer warning
 - Non-English detection is available for DE, ES, FR, PT; other languages have limited coverage

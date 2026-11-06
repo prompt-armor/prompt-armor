@@ -2,7 +2,7 @@
   <h1 align="center">prompt-armor</h1>
   <p align="center">
     <strong>The open-source firewall for LLM prompts.</strong><br>
-    Detect prompt injections, jailbreaks, and attacks in ~47ms. No LLM needed. Runs offline.
+    Detect prompt injections, jailbreaks, and attacks in ~50ms. No LLM needed. Runs offline.
   </p>
   <p align="center">
     <a href="https://github.com/prompt-armor/prompt-armor/actions"><img src="https://img.shields.io/github/actions/workflow/status/prompt-armor/prompt-armor/ci.yml?style=flat-square&label=tests" alt="CI"></a>
@@ -16,7 +16,7 @@
 
 Most LLM security tools either need an LLM to work (circular dependency), cost money per request, or return a useless binary "safe/unsafe" with no explanation.
 
-**prompt-armor** runs 5 analysis layers in parallel, fuses their scores via a trained meta-classifier, and tells you *exactly* what was detected, with evidence and confidence — in ~47ms, offline, for free.
+**prompt-armor** runs 5 analysis layers in parallel, fuses their scores via a trained meta-classifier, and tells you *exactly* what was detected, with evidence and confidence — in ~50ms, offline, for free.
 
 ```bash
 pip install prompt-armor
@@ -46,7 +46,7 @@ result.latency_ms   # 12.4
 | Detection layers | **5 (fused) + council** | 1 per scanner | 1 (LLM) | ? (proprietary) | 6 (independent) |
 | Score fusion | **Trained meta-classifier** | None | N/A | ? | None |
 | Attack categories | **8** | Binary | N/A | Multi | Binary |
-| Avg latency | **~47ms** | 200-500ms | 1-3s | ~50ms | ~100ms |
+| Avg latency | **~50ms** | 200-500ms | 1-3s | ~50ms | ~100ms |
 | MCP Server | **Yes** | No | No | No | No |
 | CI/CD exit codes | **Yes** | No | No | No | No |
 | License | **Apache 2.0** | MIT | Apache 2.0 | Proprietary | Apache 2.0 |
@@ -88,7 +88,7 @@ INPUT ── PRE ────┤                                 ├─── ME
 **Each layer catches what the others miss:**
 
 - **L1 Regex** — fast pattern matching with contextual modifiers. Catches "ignore previous instructions" and 40+ known patterns. Understands quotes and educational context.
-- **L2 Classifier** — Protect AI's DeBERTa-v3-base prompt injection model (Apache-2.0), INT8 ONNX via ONNX Runtime, hosted under the project's own Hugging Face org. Understands semantic intent — catches subtle and indirect attacks that regex can't see.
+- **L2 Classifier** — Protect AI's DeBERTa-v3-base prompt injection model (Apache-2.0), ONNX via ONNX Runtime with the same results on x86 and ARM, hosted under the project's own Hugging Face org. Understands semantic intent — catches subtle and indirect attacks that regex can't see.
 - **L3 Similarity** — contrastive fine-tuned embeddings + exact FAISS cosine search against 1,509 curated known attacks (deduplicated from 25,160 raw entries). Matches by *intent*, not topic — so security discussions are far less likely to false-positive.
 - **L4 Structural** — analyzes structure, not content. Instruction-data boundary detection, manipulation stack (Cialdini's 6 principles), Shannon entropy, delimiter injection, encoding tricks.
 - **L5 Negative Selection** — learns what "normal" prompts look like via Isolation Forest trained on 5,000 benign prompts. Flags anomalous text patterns that don't match any known attack but deviate from normal.
@@ -245,20 +245,20 @@ We report **two numbers** — the harder internal benchmark and the same-distrib
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| **F1 Score** | **82.7%** | Canonical headline metric |
-| **Precision** | 92.4% | 35 false positives out of 969 benign |
-| **Recall** | 74.9% | 142 of 565 attacks pass, ~1 in 4 (model is precision-leaning) |
-| **Avg Latency** | ~47ms | Warm, Apple M4; median ~17ms. Inputs over 150 words are also scanned in overlapping windows, which pulls the average up. First call adds a one-time model download (~233MB) and load |
+| **F1 Score** | **83.1%** | Canonical headline metric |
+| **Precision** | 90.2% | 47 false positives out of 969 benign |
+| **Recall** | 77.0% | 130 of 565 attacks pass, ~1 in 4 (model is precision-leaning) |
+| **Avg Latency** | ~50ms | Warm, Apple M4; median ~19ms. Inputs over 150 words are also scanned in overlapping windows, which pulls the average up. First call adds a one-time model download (~400MB) and load |
 
-> **Honesty note — leakage audited, not asserted.** The shipped fusion thresholds/coefficients are tuned on this benchmark, so 82.7% is an *in-sample* number. We measured the honest out-of-sample counterpart with [`scripts/eval_holdout.py`](scripts/eval_holdout.py): a **cluster-aware 70/30 split** (no held-out attack shares a near-duplicate with train) with the decision **threshold selected on train only**, averaged over 10 splits → **84.1% ± 1.2%**, within about one standard deviation of the in-sample figure. So the benchmark is **not materially leakage-inflated** by the fusion tuning. One overlap we cannot measure away: L2 is Protect AI's model, trained on `jackhhao/jailbreak-classification`, which supplies 119 of the 565 benchmark attacks; without them, in-sample F1 is 78.8%. On attacks with *no* near-duplicate in the L3 index (the zero-day case), recall holds at **81%**; benchmark↔attack-DB overlap is ~1.9% (guarded by `tests/test_no_leakage.py`). Reproduce: `python scripts/eval_holdout.py`.
+> **Honesty note — leakage audited, not asserted.** The shipped fusion thresholds/coefficients are tuned on this benchmark, so 83.1% is an *in-sample* number. We measured the honest out-of-sample counterpart with [`scripts/eval_holdout.py`](scripts/eval_holdout.py): a **cluster-aware 70/30 split** (no held-out attack shares a near-duplicate with train) with the decision **threshold selected on train only**, averaged over 10 splits → **84.2% ± 1.5%**, within about one standard deviation of the in-sample figure. So the benchmark is **not materially leakage-inflated** by the fusion tuning. One overlap we cannot measure away: L2 is Protect AI's model, trained on `jackhhao/jailbreak-classification`, which supplies 119 of the 565 benchmark attacks; without them, in-sample F1 is 79.2%. On attacks with *no* near-duplicate in the L3 index (the zero-day case), recall holds at **82%**; benchmark↔attack-DB overlap is ~1.9% (guarded by `tests/test_no_leakage.py`). Reproduce: `python scripts/eval_holdout.py`.
 
 **External evaluation** ([jayavibhav/prompt-injection](https://huggingface.co/datasets/jayavibhav/prompt-injection), 1K real-world samples):
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| **F1 Score** | **98.37%** | In-distribution: the internal benchmark and L3 training also draw from this dataset's train split, so treat as an upper bound, not generalization |
-| **Precision** | 98.7% | 4 false positives out of 692 benign |
-| **Recall** | 98.1% | 6 of 308 attacks pass |
+| **F1 Score** | **98.22%** | In-distribution: the internal benchmark and L3 training also draw from this dataset's train split, so treat as an upper bound, not generalization |
+| **Precision** | 98.1% | 6 false positives out of 692 benign |
+| **Recall** | 98.4% | 5 of 308 attacks pass |
 
 Attack DB v2: 1,509 high-specificity curated entries (from 25,160 raw). L3 contrastive fine-tuned with 2,368 mined hard negatives — attacks and benigns now embed in opposite directions (cross-similarity -0.063). 5 layers + optional Council (LLM judge). Multilingual detection covers EN, DE, ES, FR, PT. Dataset is public in `tests/benchmark/dataset/`.
 
