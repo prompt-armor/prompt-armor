@@ -4,6 +4,8 @@ All notable changes to prompt-armor will be documented in this file.
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-11-06
+
 Fix release: the L2 classifier model that 0.9.1 downloaded on first use was withdrawn from Hugging Face, so every fresh install had been running L2 on its keyword fallback without anything failing. L2 now uses Protect AI's openly licensed DeBERTa-v3-base model from a copy the project hosts itself, the fusion meta-classifier is retrained on it, every published number is re-measured, results no longer depend on CPU type or load, and a degraded layer can no longer pass CI silently. No API changes.
 
 ### What happened
