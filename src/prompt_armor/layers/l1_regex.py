@@ -114,6 +114,11 @@ class L1RegexLayer(BaseLayer):
     """Pattern matching with weighted rules and contextual modifiers."""
 
     name = "l1_regex"
+    # Each regex search has a 0.1s wall-clock ReDoS budget. Run in parallel with
+    # the ONNX layers on a 4-vCPU CI runner, searches that normally take ~1ms
+    # blew that budget and skipped rules (34 in one benchmark run), so results
+    # depended on machine load. Running first costs ~1ms of latency.
+    run_first = True
 
     def __init__(self, config: ShieldConfig | None = None) -> None:
         self._config = config or ShieldConfig()
