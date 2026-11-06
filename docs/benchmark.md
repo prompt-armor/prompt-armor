@@ -28,18 +28,20 @@ Dataset: 969 benign + 565 malicious (1,534 total) from deepset/prompt-injections
 
 | Metric | Value |
 |--------|-------|
-| Accuracy | 88.5% |
-| Precision | 90.2% |
-| Recall | 77.0% |
-| F1 Score | **83.1%** |
+| Accuracy | 88.3% |
+| Precision | 89.5% |
+| Recall | 77.2% |
+| F1 Score | **82.9%** |
 | Avg Latency | ~50ms (warm, Apple M4; median ~19ms) |
-| FP / FN | 47 / 130 |
+| FP / FN | 51 / 129 |
 
-> **How to read these two numbers.** The **internal 83.1%** is the harder, canonical figure — but it is *in-sample*: fusion thresholds/coefficients are currently tuned directly on this benchmark (no holdout), and L3's benign discrimination is trained on this set's benigns. The **external 98.22%** is *in-distribution*, not generalization: the internal benchmark and L3 training draw from jayavibhav's train split, so it should be read as an upper bound. Benchmark↔attack-DB overlap is low (~1.9%, guarded by `tests/test_no_leakage.py`). The held-out, out-of-distribution counterpart is now measured (see **Out-of-sample validation** below): a cluster-aware split with the threshold picked on train only scores **84.2% ± 1.5%**, within about one standard deviation of the in-sample 83.1%. L2 adds a training-data overlap of its own: Protect AI trained it on `jackhhao/jailbreak-classification`, the source of 119 of the 565 benchmark attacks; excluding those, in-sample F1 is **79.2%** (0.9.1's L2 on the same subset: 81.7%). The 130 FN are edge-case attacks under analysis; 94 of them are JailbreakBench harmful-behavior requests, which the L2 model does not target. Decisions are deterministic (no threshold jitter) and the benchmark is **single-shot** — an earlier internal 86.9% was inflated by per-session inflammation accumulating across the benchmark run (now isolated per session, so it no longer leaks across prompts or tenants).
+Measured by the CI `Benchmark` workflow (Linux x86, GitHub-hosted runner), which re-runs it on every push to `main`. On Apple M4 five decisions differ: L3's embedding model is dynamic INT8, which rounds slightly differently across CPUs (L2 computes in FP32 and is identical on both). The latency, out-of-sample and external figures on this page were measured on Apple M4.
+
+> **How to read these two numbers.** The **internal 82.9%** is the harder, canonical figure — but it is *in-sample*: fusion thresholds/coefficients are currently tuned directly on this benchmark (no holdout), and L3's benign discrimination is trained on this set's benigns. The **external 98.22%** is *in-distribution*, not generalization: the internal benchmark and L3 training draw from jayavibhav's train split, so it should be read as an upper bound. Benchmark↔attack-DB overlap is low (~1.9%, guarded by `tests/test_no_leakage.py`). The held-out, out-of-distribution counterpart is now measured (see **Out-of-sample validation** below): a cluster-aware split with the threshold picked on train only scores **84.2% ± 1.5%**, within about one standard deviation of the in-sample 82.9%. L2 adds a training-data overlap of its own: Protect AI trained it on `jackhhao/jailbreak-classification`, the source of 119 of the 565 benchmark attacks; excluding those, in-sample F1 is **79.2%** (0.9.1's L2 on the same subset: 81.7%). The 129 FN are edge-case attacks under analysis; most of them are JailbreakBench harmful-behavior requests, which the L2 model does not target. Decisions are deterministic (no threshold jitter) and the benchmark is **single-shot** — an earlier internal 86.9% was inflated by per-session inflammation accumulating across the benchmark run (now isolated per session, so it no longer leaks across prompts or tenants).
 
 ### Out-of-sample validation (leakage audit)
 
-The internal 83.1% is *in-sample*: the shipped fusion coefficients and decision threshold are tuned on this benchmark. To check whether that inflates the number, [`scripts/eval_holdout.py`](../scripts/eval_holdout.py) measures the honest out-of-sample counterpart:
+The internal 82.9% is *in-sample*: the shipped fusion coefficients and decision threshold are tuned on this benchmark. To check whether that inflates the number, [`scripts/eval_holdout.py`](../scripts/eval_holdout.py) measures the honest out-of-sample counterpart:
 
 - **Cluster-aware split** — benchmark samples are grouped into near-duplicate clusters (token-Jaccard ≥ 0.85, union-find) and split by *whole cluster* into 70% train / 30% holdout, so no held-out sample has a near-twin in train.
 - **Threshold on train only** — the fusion logistic-regression is retrained on the train split and the decision threshold is chosen by out-of-fold cross-validation on train, *never* on the holdout (which `train_fusion.py` does — a subtle leak this avoids).
@@ -53,7 +55,7 @@ The internal 83.1% is *in-sample*: the shipped fusion coefficients and decision 
 | Recall on **out-of-DB** attacks (zero-day) | 82.1% ± 1.5% |
 | Recall on **in-DB** attacks (11 samples, memorizable) | 100% |
 
-The out-of-sample result is **within about one standard deviation of the in-sample 83.1%** — confirming the benchmark is **not materially inflated by leakage**. The retrained holdout classifier is F1-balanced (more recall, less precision) versus the shipped precision-leaning coefficients, which is why it lands a hair higher despite being out-of-sample; the takeaway is *the number holds*, not *the number improved*.
+The out-of-sample result is **within about one standard deviation of the in-sample 82.9%** — confirming the benchmark is **not materially inflated by leakage**. The retrained holdout classifier is F1-balanced (more recall, less precision) versus the shipped precision-leaning coefficients, which is why it lands a hair higher despite being out-of-sample; the takeaway is *the number holds*, not *the number improved*.
 
 **One caveat this cannot remove without an L3 retrain:** the L3 contrastive model was trained with the benchmark benigns as negatives (a precision-side leak). The **out-of-DB recall (82%)** is the cleanest zero-day proxy available without that retrain; a fully clean number is tracked as a heavier follow-up.
 

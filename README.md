@@ -245,12 +245,12 @@ We report **two numbers** — the harder internal benchmark and the same-distrib
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| **F1 Score** | **83.1%** | Canonical headline metric |
-| **Precision** | 90.2% | 47 false positives out of 969 benign |
-| **Recall** | 77.0% | 130 of 565 attacks pass, ~1 in 4 (model is precision-leaning) |
+| **F1 Score** | **82.9%** | Canonical headline metric, as measured by the CI `Benchmark` workflow (Linux x86) on every push to `main` |
+| **Precision** | 89.5% | 51 false positives out of 969 benign |
+| **Recall** | 77.2% | 129 of 565 attacks pass, ~1 in 4 (model is precision-leaning) |
 | **Avg Latency** | ~50ms | Warm, Apple M4; median ~19ms. Inputs over 150 words are also scanned in overlapping windows, which pulls the average up. First call adds a one-time model download (~400MB) and load |
 
-> **Honesty note — leakage audited, not asserted.** The shipped fusion thresholds/coefficients are tuned on this benchmark, so 83.1% is an *in-sample* number. We measured the honest out-of-sample counterpart with [`scripts/eval_holdout.py`](scripts/eval_holdout.py): a **cluster-aware 70/30 split** (no held-out attack shares a near-duplicate with train) with the decision **threshold selected on train only**, averaged over 10 splits → **84.2% ± 1.5%**, within about one standard deviation of the in-sample figure. So the benchmark is **not materially leakage-inflated** by the fusion tuning. One overlap we cannot measure away: L2 is Protect AI's model, trained on `jackhhao/jailbreak-classification`, which supplies 119 of the 565 benchmark attacks; without them, in-sample F1 is 79.2%. On attacks with *no* near-duplicate in the L3 index (the zero-day case), recall holds at **82%**; benchmark↔attack-DB overlap is ~1.9% (guarded by `tests/test_no_leakage.py`). Reproduce: `python scripts/eval_holdout.py`.
+> **Honesty note — leakage audited, not asserted.** The shipped fusion thresholds/coefficients are tuned on this benchmark, so 82.9% is an *in-sample* number. We measured the honest out-of-sample counterpart with [`scripts/eval_holdout.py`](scripts/eval_holdout.py): a **cluster-aware 70/30 split** (no held-out attack shares a near-duplicate with train) with the decision **threshold selected on train only**, averaged over 10 splits → **84.2% ± 1.5%**, within about one standard deviation of the in-sample figure. So the benchmark is **not materially leakage-inflated** by the fusion tuning. One overlap we cannot measure away: L2 is Protect AI's model, trained on `jackhhao/jailbreak-classification`, which supplies 119 of the 565 benchmark attacks; without them, in-sample F1 is 79.2%. On attacks with *no* near-duplicate in the L3 index (the zero-day case), recall holds at **82%**; benchmark↔attack-DB overlap is ~1.9% (guarded by `tests/test_no_leakage.py`). Reproduce: `python scripts/eval_holdout.py`.
 
 **External evaluation** ([jayavibhav/prompt-injection](https://huggingface.co/datasets/jayavibhav/prompt-injection), 1K real-world samples):
 

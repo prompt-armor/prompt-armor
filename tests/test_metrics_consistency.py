@@ -6,7 +6,7 @@ surfaces only — NOT the CHANGELOG or the dated blog post (legitimate historica
 records) and NOT docs/layers.md (per-layer technical latencies).
 
 Canonical framing (decided 2026-06, re-measured for 0.9.2 after the L2 model
-swap): F1 83.1% internal (1,534-sample) / 98.22% external (jayavibhav,
+swap): F1 82.9% internal (1,534-sample) / 98.22% external (jayavibhav,
 same-distribution). Latency ~50ms warm average. The out-of-sample validation
 figure (84.2%, scripts/eval_holdout.py) is also allowed.
 """
@@ -39,11 +39,11 @@ _LIVE_FILES = [
 
 # F1 figures allowed in live surfaces: the two canonical headline numbers plus
 # the out-of-sample validation figure (held-out F1, scripts/eval_holdout.py),
-# deliberately cited alongside the in-sample 83.1% to prove it is not
-# leakage-inflated. 83.1% / 98.22% remain THE headline (enforced present below).
+# deliberately cited alongside the in-sample 82.9% to prove it is not
+# leakage-inflated. 82.9% / 98.22% remain THE headline (enforced present below).
 # Superseded figures (84.4 / 85.5 / 98.87 from the withdrawn 0.9.1 L2 model, and
 # 56.3 from its keyword fallback) belong in the CHANGELOG only.
-_HEADLINE_F1 = {"83.1", "98.22"}
+_HEADLINE_F1 = {"82.9", "98.22"}
 # 79.2 is the in-sample F1 without the 119 attacks whose source dataset is in the
 # L2 model's training data, disclosed next to the headline (README, docs/benchmark.md).
 _CANONICAL_F1 = _HEADLINE_F1 | {"84.2", "79.2"}
@@ -71,7 +71,7 @@ def test_f1_claims_are_canonical(path):
     bad = sorted({n for n in found if n not in _CANONICAL_F1})
     assert not bad, (
         f"{path.relative_to(_ROOT)} cites non-canonical F1 {bad}. "
-        f"Use only {sorted(_CANONICAL_F1)} (83.1% in-sample / 98.22% external / 84.2% held-out / 79.2% overlap-excluded)."
+        f"Use only {sorted(_CANONICAL_F1)} (82.9% in-sample / 98.22% external / 84.2% held-out / 79.2% overlap-excluded)."
     )
 
 
@@ -85,4 +85,4 @@ def test_no_stale_headline_latency(path):
 def test_canonical_numbers_are_actually_present():
     """Sanity: the README must contain both canonical F1 figures (guards a typo'd allowlist)."""
     readme = (_ROOT / "README.md").read_text()
-    assert "83.1%" in readme and "98.22%" in readme
+    assert "82.9%" in readme and "98.22%" in readme

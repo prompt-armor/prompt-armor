@@ -20,7 +20,7 @@ Fix release: the L2 classifier model that 0.9.1 downloaded on first use was with
   - No more score stretch: 0.9.1's model compressed its output to ~0.23–0.78 and was rescaled; this one already spans 0–1.
 - **Fusion meta-classifier retrained** on the new L2 scores (`scripts/dump_layer_scores.py` → `scripts/train_fusion.py`):
   - Coefficients are non-negative by construction: features whose weight comes out negative (L4, L5, min score, L1×L4) are pinned to 0 and the rest refit, instead of being clamped after the fit.
-  - The decision threshold is now picked on the function that ships. `train_fusion.py` used to pick it on the raw logistic output, but `fusion.py` then hard-blocks corroborated ≥ 0.95 signals and dampens L3-only risk after the sigmoid; that mismatch cost 3 F1 points with the new L2 (80.2% → 83.1%). The threshold is still chosen on the held-out 30% only, and is folded into the intercept so the runtime threshold stays at 0.50. The two post-processing rules now live in shared functions (`fusion._hard_block`, `fusion._l3_solo_factor`) used by both.
+  - The decision threshold is now picked on the function that ships. `train_fusion.py` used to pick it on the raw logistic output, but `fusion.py` then hard-blocks corroborated ≥ 0.95 signals and dampens L3-only risk after the sigmoid; that mismatch cost 3 F1 points with the new L2 (80.2% → 83.1% on Apple M4). The threshold is still chosen on the held-out 30% only, and is folded into the intercept so the runtime threshold stays at 0.50. The two post-processing rules now live in shared functions (`fusion._hard_block`, `fusion._l3_solo_factor`) used by both.
 - **Results no longer vary from run to run.** L1 matches each regex under a 0.1s wall-clock budget (ReDoS guard), and the L2/L3 ONNX sessions used every core while the engine also ran the layers in parallel, so L1 searches timed out and skipped rules: 29–137 times per benchmark run for 0.9.1 on an Apple M4 (one of those runs scored 84.31% instead of 84.43%), 32 in CI (two CI runs of the same code scored 56.3% and 56.46%). ONNX sessions now use fixed small thread counts (L2: 2, L3: 1; `layers.base.onnx_session_options`): zero skipped rules on a quiet machine.
 
 ### Added
@@ -31,14 +31,15 @@ These replace the 0.9.1 figures everywhere (`tests/test_metrics_consistency.py` 
 
 | | 0.9.1, model cached | 0.9.1, fresh install | **0.9.2** |
 |---|---|---|---|
-| Internal F1, in-sample (1,534 samples) | 84.4% (P 94.5%, R 76.3%) | 56.3% (P 88.6%, R 41.2%) | **83.1%** (P 90.2%, R 77.0%) |
+| Internal F1, in-sample (1,534 samples, CI) | 84.4% (P 94.5%, R 76.3%) | 56.3% (P 88.6%, R 41.2%) | **82.9%** (P 89.5%, R 77.2%) |
 | Out-of-sample F1 (10 cluster splits) | 85.5% ± 1.2% | — | **84.2% ± 1.5%** |
 | External F1 (jayavibhav 1K) | 98.87% | — | **98.22%** |
 | Warm latency, benchmark average (Apple M4) | ~24ms published; ~32ms re-measured | — | **~50ms** |
 | Warm latency, median | ~16ms | — | **~19ms** |
 
 - Latency: the ~24ms published for 0.9.1 did not reproduce on the same machine (~32ms quiet). Measured back to back under the same load, 0.9.2's average is about 1.6× 0.9.1's: L2 is now a 184M-parameter model computing in FP32 (0.9.1's had 22M), and inputs over 150 words run through it up to 11 times (full text plus overlapping windows). The median moves less.
-- Precision drops (25 → 47 false positives out of 969 benign) and recall rises (134 → 130 missed attacks out of 565).
+- The in-sample figure is the CI `Benchmark` workflow's (Linux x86), which re-runs on every push to `main`. On Apple M4 it is 83.1%: L2 now computes identically on both, but L3's embedding model is still dynamic INT8 and flips five decisions. The other figures were measured on Apple M4.
+- Precision drops (25 → 51 false positives out of 969 benign) and recall rises (134 → 129 missed attacks out of 565).
 - Training-data overlap, stated rather than hidden: Protect AI trained this model on `jackhhao/jailbreak-classification`, the source of 119 of the 565 benchmark attacks. Without those, in-sample F1 is 79.2% (0.9.1 on the same subset: 81.7%).
 - Where 0.9.2 detects less than 0.9.1: JailbreakBench harmful-behavior requests (6 of 100 vs 8 of 100); the model's authors note it does not target jailbreaks. It detects more of the hand-crafted encoding and compound attacks (25 of 25 vs 22 of 25) and of the deepset test split (37 of 59 vs 36 of 59).
 

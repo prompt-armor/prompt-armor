@@ -1,7 +1,7 @@
 FROM python:3.12-slim
 
 LABEL maintainer="prompt-armor contributors"
-LABEL description="Open-source prompt injection detector — 5 layers, F1 83.1% internal / 98.22% external, ~50ms, offline"
+LABEL description="Open-source prompt injection detector — 5 layers, F1 82.9% internal / 98.22% external, ~50ms, offline"
 LABEL org.opencontainers.image.source="https://github.com/prompt-armor/prompt-armor"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
