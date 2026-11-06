@@ -245,7 +245,7 @@ We report **two numbers** — the harder internal benchmark and the same-distrib
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| **F1 Score** | **82.9%** | Canonical headline metric, as measured by the CI `Benchmark` workflow (Linux x86) on every push to `main` |
+| **F1 Score** | **82.9%** | Canonical headline metric, as measured by the CI `Benchmark` workflow (Linux x86). Varies by CPU type (82.5% to 83.1%) because L3's embedding model is INT8; see [docs/benchmark.md](docs/benchmark.md) |
 | **Precision** | 89.5% | 51 false positives out of 969 benign |
 | **Recall** | 77.2% | 129 of 565 attacks pass, ~1 in 4 (model is precision-leaning) |
 | **Avg Latency** | ~50ms | Warm, Apple M4; median ~19ms. Inputs over 150 words are also scanned in overlapping windows, which pulls the average up. First call adds a one-time model download (~400MB) and load |
