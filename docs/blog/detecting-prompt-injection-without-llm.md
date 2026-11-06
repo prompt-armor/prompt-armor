@@ -1,5 +1,7 @@
 # Detecting Prompt Injection in 27ms Without an LLM
 
+> **Historical post (March 2026, v0.4).** The numbers below describe the engine at the time of writing and are kept as a record. Current, leakage-audited metrics (F1 84.4% in-sample, 85.5% ± 1.2% out-of-sample, ~24ms warm) are in [docs/benchmark.md](../benchmark.md).
+
 *How we built a 4-layer prompt injection detector that runs offline, costs nothing per request, and catches 94% of attacks — including ones that fool GPT-4.*
 
 ---
