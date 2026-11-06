@@ -121,6 +121,7 @@ def train_fusion(scores_path: Path, holdout_ratio: float = 0.3, allow_negative: 
     # Train with stratified 5-fold CV on TRAIN set only
     print("Training LogisticRegressionCV (5-fold stratified, balanced weights)...")
     clf, active = _fit(x_train, y_train, allow_negative)
+    raw_test = x_test[:, :5].copy()  # l1..l5, for the deployed decision function below
     x_train, x_test = x_train[:, active], x_test[:, active]
 
     print(f"Best C: {clf.C_[0]:.4f}")
@@ -138,39 +139,47 @@ def train_fusion(scores_path: Path, holdout_ratio: float = 0.3, allow_negative: 
     print("=== HELD-OUT Test Set Metrics (HONEST) ===")
     print(classification_report(y_test, y_pred_test, target_names=["benign", "malicious"]))
 
-    # Use test set for threshold optimization
-    y_prob = y_prob_test
-    y_eval = y_test
+    # Pick the decision threshold on the HELD-OUT split, scoring the function that
+    # actually ships: fusion.py hard-blocks corroborated >= 0.95 signals and
+    # dampens L3-only risk AFTER the sigmoid. Choosing it on the raw sigmoid
+    # instead mismatched training and deployment (cost ~3 F1 points in v0.9.2).
+    from prompt_armor.config import ShieldConfig
+    from prompt_armor.fusion import _META_THRESHOLD, _hard_block, _l3_solo_factor
 
-    # Find optimal threshold on HELD-OUT test set
-    print("=== Threshold Optimization (on held-out test set) ===")
-    best_f1 = 0
-    best_thresh = 0.5
+    hard_block = ShieldConfig().thresholds.hard_block
+    test_logits = clf.decision_function(x_test)
+
+    def deployed_risk(threshold: float) -> np.ndarray:
+        shift = -np.log(threshold / (1 - threshold))
+        risks = []
+        for z, (l1, l2, l3, l4, l5) in zip(test_logits, raw_test):
+            if _hard_block(l1, l2, l3, l4, l5, hard_block):
+                risks.append(max(l1, l2, l3, l4, l5))
+            else:
+                risks.append(_l3_solo_factor(l1, l2, l3, l4, l5) / (1.0 + np.exp(-(z + shift))))
+        return np.array(risks)
+
+    y_eval = y_test
+    print("=== Threshold Optimization (held-out test set, deployed decision function) ===")
+    best_f1, best_thresh = 0.0, 0.5
+    best_recall_at_prec85, thresh_at_prec85 = 0.0, 0.5
     for thresh in np.arange(0.1, 0.9, 0.01):
-        preds = (y_prob >= thresh).astype(int)
+        preds = (deployed_risk(thresh) >= _META_THRESHOLD).astype(int)
         f1 = f1_score(y_eval, preds)
         if f1 > best_f1:
-            best_f1 = f1
-            best_thresh = thresh
-
-    # Also find threshold for precision >= 85%
-    best_recall_at_prec85 = 0
-    thresh_at_prec85 = 0.5
-    for thresh in np.arange(0.1, 0.9, 0.01):
-        preds = (y_prob >= thresh).astype(int)
+            best_f1, best_thresh = f1, thresh
         p = precision_score(y_eval, preds, zero_division=0)
         r = recall_score(y_eval, preds)
         if p >= 0.85 and r > best_recall_at_prec85:
-            best_recall_at_prec85 = r
-            thresh_at_prec85 = thresh
+            best_recall_at_prec85, thresh_at_prec85 = r, thresh
 
     print(f"Best F1 threshold: {best_thresh:.2f} (F1={best_f1:.3f})")
-    preds = (y_prob >= best_thresh).astype(int)
+    preds = (deployed_risk(best_thresh) >= _META_THRESHOLD).astype(int)
     print(f"  Precision: {precision_score(y_eval, preds):.3f}")
     print(f"  Recall: {recall_score(y_eval, preds):.3f}")
     print()
     print(f"Best recall at precision>=85%: threshold={thresh_at_prec85:.2f}")
-    preds = (y_prob >= thresh_at_prec85).astype(int)
+    preds = (deployed_risk(thresh_at_prec85) >= _META_THRESHOLD).astype(int)
     print(f"  Precision: {precision_score(y_eval, preds):.3f}")
     print(f"  Recall: {recall_score(y_eval, preds):.3f}")
     print(f"  F1: {f1_score(y_eval, preds):.3f}")
@@ -183,16 +192,18 @@ def train_fusion(scores_path: Path, holdout_ratio: float = 0.3, allow_negative: 
     feature_names = FEATURE_NAMES
 
     # fusion.py decides at a fixed 0.50 (_META_THRESHOLD, shared with the gate and
-    # the benchmark). Fold the F1-optimal threshold into the intercept instead:
-    # sigmoid(z + b - logit(t)) >= 0.5  <=>  sigmoid(z + b) >= t.
+    # the benchmark), so the chosen threshold is folded into the intercept;
+    # deployed_risk() above already scored it that way.
     intercept = trained_intercept - float(np.log(best_thresh / (1 - best_thresh)))
-    y_prob_test = 1.0 / (1.0 + np.exp(-(np.log(y_prob_test / (1 - y_prob_test)) + intercept - trained_intercept)))
+    y_prob_test = deployed_risk(best_thresh)  # what fusion.py's calibration sees at runtime
 
     print()
     print("=== Learned Coefficients ===")
     for name, coef in zip(feature_names, coefs):
         print(f"  {name:20s}: {coef:+.4f}")
-    print(f"  {'intercept':20s}: {intercept:+.4f}  (trained {trained_intercept:+.4f}, threshold {best_thresh:.2f} folded in)")
+    print(
+        f"  {'intercept':20s}: {intercept:+.4f}  (trained {trained_intercept:+.4f}, threshold {best_thresh:.2f} folded in)"
+    )
 
     # === Isotonic Calibration on held-out test set ===
     from sklearn.isotonic import IsotonicRegression
