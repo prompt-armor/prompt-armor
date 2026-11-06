@@ -46,7 +46,9 @@ _LIVE_FILES = [
 _HEADLINE_F1 = {"82.9", "98.22"}
 # 79.2 is the in-sample F1 without the 119 attacks whose source dataset is in the
 # L2 model's training data, disclosed next to the headline (README, docs/benchmark.md).
-_CANONICAL_F1 = _HEADLINE_F1 | {"84.2", "79.2"}
+# 82.5 / 83.1 are the same benchmark on other CPU types (L3 is INT8), disclosed next
+# to the headline in README.md and docs/benchmark.md.
+_CANONICAL_F1 = _HEADLINE_F1 | {"84.2", "79.2", "82.5", "83.1"}
 
 # Stale headline latencies that the reconciliation removed. (Competitor latencies
 # like ~50ms / ~100ms in the comparison table are fine — hence a denylist, not an

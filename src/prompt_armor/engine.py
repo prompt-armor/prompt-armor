@@ -280,13 +280,24 @@ class LiteEngine:
             LiteEngine._atexit_registered = True
 
     def _analyze_single(self, text: str, start: float) -> ShieldResult:
-        """Run all layers in parallel on a single text segment.
+        """Run all layers on a single text segment, in parallel except ``run_first`` ones.
+
+        ``run_first`` layers (L1) run on the calling thread before the others are
+        dispatched, so their wall-clock budgets never compete with the ONNX layers
+        for CPU. The pool timeout could not preempt them anyway: a GIL-holding
+        regex is bounded by L1's own per-search timeout.
 
         Uses per-layer timeout and fail-open: if a layer hangs or crashes,
         analysis proceeds with the remaining layers.
         """
-        futures = {self._pool.submit(layer.analyze, text): layer.name for layer in self._layers}
         layer_results = []
+        for layer in self._layers:
+            if layer.run_first:
+                try:
+                    layer_results.append(layer.analyze(text))
+                except Exception as e:
+                    logger.warning("Layer %s failed: %s, skipping", layer.name, e)
+        futures = {self._pool.submit(layer.analyze, text): layer.name for layer in self._layers if not layer.run_first}
         for future in futures:
             layer_name = futures[future]
             try:
