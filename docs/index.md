@@ -6,7 +6,7 @@
 
 - **5 parallel analysis layers** — regex, ML classifier, contrastive semantic similarity, structural analysis, anomaly detection
 - **Trained meta-classifier fusion** — learned optimal layer combination from benchmark data
-- **~24ms latency (warm)** — fast enough for real-time API integration
+- **~47ms average latency (warm; median ~17ms)** — fast enough for real-time API integration
 - **Fully offline** — no API keys, no LLM dependency, no network calls during analysis
 - **Multilingual** — EN, DE, ES, FR, PT regex rules + multilingual embeddings
 - **Session awareness** — per-session inflammation cascade (keyed by `session_id`) catches iterative probing attacks
@@ -34,8 +34,8 @@ print(result.decision)  # Decision.BLOCK
 
 We report **two numbers** — the harder internal benchmark and the same-distribution external one.
 
-**Internal (1,534 samples, harder):** F1 **84.4%** | Precision 94.5% | Recall 76.3% | Latency ~24ms (warm)
+**Internal (1,534 samples, harder):** F1 **82.7%** | Precision 92.4% | Recall 74.9% | Latency ~47ms (warm)
 
-**External (jayavibhav/prompt-injection 1K):** F1 **98.87%** | Precision 98.4% | Recall 99.4% — in-distribution (shares jayavibhav's train split), treat as an upper bound, not generalization
+**External (jayavibhav/prompt-injection 1K):** F1 **98.37%** | Precision 98.7% | Recall 98.1% — in-distribution (shares jayavibhav's train split), treat as an upper bound, not generalization
 
 Attack DB v2: 1,509 high-specificity entries. L3 contrastive fine-tuned with 2.4K hard negatives.

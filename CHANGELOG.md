@@ -4,6 +4,40 @@ All notable changes to prompt-armor will be documented in this file.
 
 ## [Unreleased]
 
+Fix release: the L2 classifier model that 0.9.1 downloaded on first use was withdrawn from Hugging Face, so every fresh install had been running L2 on its keyword fallback without anything failing. L2 now uses Protect AI's openly licensed DeBERTa-v3-base model from a copy the project hosts itself, the fusion meta-classifier is retrained on it, every published number is re-measured, and a degraded layer can no longer pass CI silently. No API changes.
+
+### What happened
+- 0.9.1's L2 downloaded `aldenb/scout-prompt-injection-classifier-22m` from a third-party Hugging Face account, pinned to a commit. That repository was withdrawn (HTTP 401; the account now lists no public models). A pinned revision protects against a *changed* artifact, not a *vanished* one.
+- On a fresh install, L2 logged one download warning and fell back to its keyword heuristic. Nothing else failed: the engine still listed `l2_classifier` among its active layers, the model-only unit tests skipped, and the CI benchmark ran to completion.
+- The CI `Benchmark` workflow is what exposed it: the run after the 2026-11-06 merge to `main` measured **F1 56.3%** (precision 88.6%, recall 41.2%) instead of 84.4%. Installs that had cached the model earlier were unaffected; any install made after the withdrawal got the degraded engine. 0.9.2 is the fix; there is no workaround for 0.9.1 short of upgrading.
+
+### Fixed
+- **L2 now runs [`protectai/deberta-v3-base-prompt-injection-v2`](https://huggingface.co/protectai/deberta-v3-base-prompt-injection-v2)** (DeBERTa-v3-base, Apache-2.0, fine-tuned by Protect AI), quantized to INT8 ONNX and hosted at [`prompt-armor/l2-deberta-onnx`](https://huggingface.co/prompt-armor/l2-deberta-onnx), pinned by commit. All three downloaded models (L2, L3, L5) now live in the project's own Hugging Face org; Protect AI has archived the project behind this model, which is one more reason to keep a copy. `scripts/export_l2_model.py` rebuilds the artifact byte for byte from the pinned upstream revision.
+  - Quantization must be per-channel: plain per-tensor dynamic INT8 collapses this model (benchmark AUC 0.92 → 0.65). Per-channel keeps 98.5% decision agreement with FP32 (AUC 0.914) at 233MB instead of 738MB.
+  - The `small` variant was evaluated and not chosen: lower AUC on the benchmark (0.85 vs 0.92 in FP32), and its upstream repository is gated.
+  - The model lives in a new directory (`data/models/l2-deberta-onnx/`), so an upgraded install never pairs 0.9.1's cached `classifier.onnx` with the new fusion weights. If the package directory is read-only, the model goes to the Hugging Face cache instead of falling back.
+  - No more score stretch: 0.9.1's model compressed its output to ~0.23–0.78 and was rescaled; this one already spans 0–1.
+- **Fusion meta-classifier retrained** on the new L2 scores (`scripts/dump_layer_scores.py` → `scripts/train_fusion.py`). Coefficients are now non-negative by construction: features whose weight comes out negative (L4, L5, min score, L1×L4) are pinned to 0 and the rest refit, instead of being clamped after the fit. The F1-optimal threshold is folded into the intercept, so the decision threshold stays at 0.50.
+- **Results no longer vary from run to run.** L1 matches each regex under a 0.1s wall-clock budget (ReDoS guard), and the L2/L3 ONNX sessions used every core while the engine also ran the layers in parallel, so L1 searches timed out and skipped rules: 78–137 times per benchmark run for 0.9.1 on an Apple M4, 32 times in CI, where two runs of the same code scored 56.3% and 56.46%. ONNX sessions now run single-threaded (`layers.base.onnx_session_options`): zero timeouts on the same benchmark, lower median latency.
+
+### Added
+- **A degraded layer is now loud.** `BaseLayer.degraded` and `LiteEngine.degraded_layers` report layers running a fallback, and the engine logs a warning at startup. `tests/unit/test_l2_classifier.py::TestL2ModelLoaded` and `tests/unit/test_engine.py::test_no_layer_is_degraded` fail when L2 is on the heuristic; `test_model_integrity.py` checks that L2 is pinned and comes from the project's own org. `run_benchmark.py`, `dump_layer_scores.py` and `eval_holdout.py` refuse to produce numbers from a degraded or incomplete engine (`--allow-degraded` overrides), and the `Benchmark` workflow fails if F1 drops more than a point below the published figure (`--min-f1`). The workflow now also runs on pull requests, so a release PR shows its number before it merges.
+
+### Changed — published metrics, re-measured
+These replace the 0.9.1 figures everywhere (`tests/test_metrics_consistency.py` enforces it).
+
+| | 0.9.1, model cached | 0.9.1, fresh install | **0.9.2** |
+|---|---|---|---|
+| Internal F1, in-sample (1,534 samples) | 84.4% (P 94.5%, R 76.3%) | 56.3% (P 88.6%, R 41.2%) | **82.7%** (P 92.4%, R 74.9%) |
+| Out-of-sample F1 (10 cluster splits) | 85.5% ± 1.2% | — | **84.1% ± 1.2%** |
+| External F1 (jayavibhav 1K) | 98.87% | — | **98.37%** |
+| Warm latency, benchmark average | ~24ms published; ~32ms re-measured | — | **~47ms** |
+| Warm latency, median | ~16ms | — | **~17ms** |
+
+- Latency was measured for both versions back to back on the same machine (Apple M4, quiet): the ~24ms published for 0.9.1 did not reproduce there. The average rises because L2 is now a 184M-parameter model (0.9.1's had 22M) and inputs over 150 words run through it up to 11 times (full text plus overlapping windows); the median barely moves.
+- Training-data overlap, stated rather than hidden: Protect AI trained this model on `jackhhao/jailbreak-classification`, the source of 119 of the 565 benchmark attacks. Without those, in-sample F1 is 78.8% (0.9.1 on the same subset: 81.7%).
+- Where 0.9.2 detects less than 0.9.1: JailbreakBench harmful-behavior requests (2 of 100 vs 8 of 100) and the deepset test split (32 of 59 vs 36 of 59); the model's authors note it does not target jailbreaks. It detects more of the hand-crafted encoding and compound attacks (25 of 25 vs 22 of 25).
+
 ## [0.9.1] - 2026-06-03
 
 Patch release: makes `pip install prompt-armor` correct out of the box (the ML detection layers now ship by default — a base install was silently returning ALLOW on textbook injections), removes a noisy scikit-learn warning, and adds a reproducible out-of-sample validation of the headline F1. No API changes.

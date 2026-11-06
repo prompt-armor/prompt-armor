@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-prompt-armor is an open-core LLM prompt security analysis tool. It detects prompt injections, jailbreaks, and other attacks against LLMs. The Lite engine runs 5 analysis layers in parallel, fuses scores via a trained meta-classifier, and returns decisions in ~24ms (warm) offline. **Canonical metrics: F1 84.4% internal (1,534-sample) / 98.87% external (jayavibhav 1K, same-distribution).** When citing metrics anywhere (README, docs, integrations), use exactly these two numbers — `tests/test_metrics_consistency.py` enforces it.
+prompt-armor is an open-core LLM prompt security analysis tool. It detects prompt injections, jailbreaks, and other attacks against LLMs. The Lite engine runs 5 analysis layers in parallel, fuses scores via a trained meta-classifier, and returns decisions in ~47ms (warm average; median ~17ms) offline. **Canonical metrics: F1 82.7% internal (1,534-sample) / 98.37% external (jayavibhav 1K, same-distribution).** When citing metrics anywhere (README, docs, integrations), use exactly these two numbers — `tests/test_metrics_consistency.py` enforces it.
 
 ## Commands
 
@@ -61,7 +61,7 @@ The core pipeline runs 5 analysis layers **in parallel** via `ThreadPoolExecutor
 
 - **`engine.py` (LiteEngine)** — Orchestrates: Unicode normalization, sliding window segmentation, parallel layer dispatch, per-layer timeout (2s) with fail-open. **Inflammation cascade**: per-session threat awareness (keyed by `session_id`, stateless by default) with exponential decay.
 - **`layers/l1_regex.py`** — 40+ English + 20 multilingual (DE/ES/FR/PT) weighted regex rules. Context modifier exploit hardened (high scores not dampened).
-- **`layers/l2_classifier.py`** — DeBERTa-v3-xsmall (22M params, ONNX) with score calibration. Auto-downloads from HuggingFace on first use. Falls back to keyword heuristic.
+- **`layers/l2_classifier.py`** — Protect AI's DeBERTa-v3-base prompt injection classifier (184M params, Apache-2.0), INT8 ONNX. Auto-downloads from `prompt-armor/l2-deberta-onnx` (our own HF copy, pinned) on first use. Falls back to a keyword heuristic, reported via `degraded` / `LiteEngine.degraded_layers`.
 - **`layers/l3_similarity.py`** — **Contrastive fine-tuned** MiniLM-L12-v2 + exact FAISS cosine search against 1,509 curated attacks (v2 DB, deduplicated from 25,160 raw). Intent-based matching (not topic-based).
 - **`layers/l4_structural.py`** — Instruction-data boundary detection, manipulation stack (Cialdini's 6 principles), Shannon entropy, delimiter injection, encoding tricks, role assignment.
 - **`layers/l5_negative_selection.py`** — Isolation Forest anomaly detection trained on 5K benign prompts. Catches zero-day attacks via deviation from normal text patterns.
@@ -79,13 +79,13 @@ The core pipeline runs 5 analysis layers **in parallel** via `ThreadPoolExecutor
 - **CLI exit codes** — 0=allow, 1=warn, 2=block, 3=error
 - **MCP server is Python** — Uses `mcp` SDK (FastMCP)
 - **Meta-classifier coefficients are hardcoded in fusion.py** — retrain via `scripts/train_fusion.py` if layers or dataset change
-- **L2 model auto-downloads** — from HuggingFace Hub on first use (~83MB)
+- **L2 model auto-downloads** — from `prompt-armor/l2-deberta-onnx` on first use (~233MB). Never point L2 at a third-party repo again: 0.9.1's source was withdrawn and every fresh install silently degraded. Rebuild/re-upload with `scripts/export_l2_model.py`
 
 ### Data files
 
 - `data/rules/default_rules.yml` — L1 regex rules (EN + DE/ES/FR/PT)
 - `data/attacks/known_attacks.jsonl` — L3 attack DB (25,160 entries)
-- `data/models/` — L2 ONNX model (auto-downloaded) + L3 contrastive model (trained locally, not in git)
+- `data/models/` — L2 ONNX model in `l2-deberta-onnx/` (auto-downloaded) + L3 contrastive model (trained locally, not in git)
 
 ## Git Workflow (MANDATORY)
 
