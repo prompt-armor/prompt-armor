@@ -34,7 +34,7 @@ print(result.decision)  # Decision.BLOCK
 
 We report **two numbers** — the harder internal benchmark and the same-distribution external one.
 
-**Internal (1,534 samples, harder):** F1 **86.6%** | Precision 91.5% | Recall 82.1% | Latency ~17ms (warm, Apple M4)
+**Internal (1,534 samples, harder):** F1 **86.5%** | Precision 91.5% | Recall 81.9% | Latency ~17ms (warm, Apple M4)
 
 **External (jayavibhav/prompt-injection 1K):** F1 **95.08%** | Precision 96.0% | Recall 94.2% — in-distribution (shares jayavibhav's train split), treat as an upper bound, not generalization
 

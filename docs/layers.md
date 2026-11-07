@@ -43,11 +43,12 @@ Features:
 
 ## L3 — Semantic Similarity (Contrastive)
 
-**Latency:** 10-20ms | **Dependencies:** sentence-transformers, faiss-cpu
+**Latency:** ~6ms median, ~20ms p95 (1 thread, Apple M4) | **Dependencies:** onnxruntime, tokenizers, faiss-cpu
 
 Compares prompt embeddings against a curated database of **1,509 high-specificity attack embeddings** (v0.8.0 — v2 DB, semantically deduplicated from 25,160 raw entries) using cosine similarity via FAISS.
 
 - Model: `paraphrase-multilingual-MiniLM-L12-v2`, **contrastive fine-tuned v2** with TripletLoss + 2,368 mined hard negatives (jayavibhav benigns that scored high with v1 model)
+- Runs via ONNX Runtime from [`prompt-armor/l3-contrastive-onnx`](https://huggingface.co/prompt-armor/l3-contrastive-onnx) (~240MB, pinned by commit SHA). Weights are stored as FP16 and cast to FP32 when the session loads, so embeddings match on x86 and ARM (within 3e-7). Up to 0.9.4 the model was dynamic INT8, which rounds differently per CPU and moved the benchmark F1 by up to six tenths across machines. The v0.8.0 FP32 checkpoint was not kept, so this build is dequantized from the published INT8 graph (mean cosine 0.9998 to it); `scripts/export_l3_onnx.py --from-int8` rebuilds it byte for byte
 - Fine-tuning separates embeddings by **intent**, not topic — "how does DAN jailbreak work?" (benign) no longer matches "do anything now" (attack)
 - Cross-similarity (attack↔benign): v0 base 0.048 → v1 fine-tune -0.021 → **v2 fine-tune -0.063** (opposite directions)
 - Attack self-similarity: 0.17 → **0.82** (attacks cluster consistently)

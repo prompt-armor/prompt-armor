@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-prompt-armor is an open-core LLM prompt security analysis tool. It detects prompt injections, jailbreaks, and other attacks against LLMs. The Lite engine runs 5 analysis layers in parallel, fuses scores via a trained meta-classifier, and returns decisions in ~17ms (warm average on Apple M4; median ~6ms) offline. **Canonical metrics: F1 86.6% internal (1,534-sample) / 95.08% external (jayavibhav 1K, same-distribution).** When citing metrics anywhere (README, docs, integrations), use exactly these two numbers — `tests/test_metrics_consistency.py` enforces it.
+prompt-armor is an open-core LLM prompt security analysis tool. It detects prompt injections, jailbreaks, and other attacks against LLMs. The Lite engine runs 5 analysis layers in parallel, fuses scores via a trained meta-classifier, and returns decisions in ~17ms (warm average on Apple M4; median ~6ms) offline. **Canonical metrics: F1 86.5% internal (1,534-sample) / 95.08% external (jayavibhav 1K, same-distribution).** When citing metrics anywhere (README, docs, integrations), use exactly these two numbers — `tests/test_metrics_consistency.py` enforces it.
 
 ## Commands
 
@@ -62,7 +62,7 @@ The core pipeline runs 5 analysis layers **in parallel** via `ThreadPoolExecutor
 - **`engine.py` (LiteEngine)** — Orchestrates: Unicode normalization, sliding window segmentation, parallel layer dispatch, per-layer timeout (2s, counted from when the layer starts, not from when it was queued) with fail-open. **Inflammation cascade**: per-session threat awareness (keyed by `session_id`, stateless by default) with exponential decay.
 - **`layers/l1_regex.py`** — 40+ English + 20 multilingual (DE/ES/FR/PT) weighted regex rules. Context modifier exploit hardened (high scores not dampened).
 - **`layers/l2_classifier.py`** — Horizon Labs' multilingual prompt injection classifier (`prompt-injection-guard-small`, mmBERT-small, 141M params, Apache-2.0), ONNX with INT8 embeddings and FP32 compute (dynamic INT8 matmuls gave different answers on x86 and ARM). Auto-downloads from `prompt-armor/l2-injection-guard-onnx` (our own HF copy, pinned) on first use. Falls back to a keyword heuristic, reported via `degraded` / `LiteEngine.degraded_layers`. Replaced Protect AI's English-only DeBERTa in 0.9.4, which scored ordinary Portuguese as injection; `tests/benchmark/run_language_parity.py` guards it.
-- **`layers/l3_similarity.py`** — **Contrastive fine-tuned** MiniLM-L12-v2 + exact FAISS cosine search against 1,509 curated attacks (v2 DB, deduplicated from 25,160 raw). Intent-based matching (not topic-based).
+- **`layers/l3_similarity.py`** — **Contrastive fine-tuned** MiniLM-L12-v2 + exact FAISS cosine search against 1,509 curated attacks (v2 DB, deduplicated from 25,160 raw). Intent-based matching (not topic-based). ONNX with FP16 weights and FP32 compute since 0.9.5 (dynamic INT8 gave different scores per CPU). Auto-downloads from `prompt-armor/l3-contrastive-onnx` (pinned); rebuild with `scripts/export_l3_onnx.py`, then `scripts/build_l3_index.py`.
 - **`layers/l4_structural.py`** — Instruction-data boundary detection, manipulation stack (Cialdini's 6 principles), Shannon entropy, delimiter injection, encoding tricks, role assignment.
 - **`layers/l5_negative_selection.py`** — Isolation Forest anomaly detection trained on 5K benign prompts. Catches zero-day attacks via deviation from normal text patterns.
 - **`fusion.py`** — Trained LogisticRegression meta-classifier (9 features). Optional threshold jitter (`jitter_sigma`, default 0.0) only lowers the threshold. L3/L4 raw coefficients clamped to 0.
@@ -87,7 +87,7 @@ The core pipeline runs 5 analysis layers **in parallel** via `ThreadPoolExecutor
 
 - `data/rules/default_rules.yml` — L1 regex rules (EN + DE/ES/FR/PT)
 - `data/attacks/known_attacks.jsonl` — L3 attack DB (25,160 entries)
-- `data/models/` — L2 ONNX model in `l2-injection-guard-onnx/` (auto-downloaded) + L3 contrastive model (trained locally, not in git)
+- `data/models/` — L2 ONNX model in `l2-injection-guard-onnx/` (auto-downloaded) + L3 contrastive model (trained locally, not in git). The shipped L3 is the pinned `l3-contrastive-onnx` revision, not whatever SentenceTransformer sits in `l3-contrastive/` (in 2026-11 that was an unpublished retrain; `export_l3_onnx.py --from-int8` rebuilds the shipped one)
 - `tests/benchmark/dataset/language_parity.jsonl` — parallel EN/PT/ES/DE/FR benign and attack texts for the language parity check (sources in `LANGUAGE_PARITY.md`)
 
 ## Git Workflow (MANDATORY)
