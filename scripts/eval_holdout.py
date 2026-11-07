@@ -54,6 +54,7 @@ sys.path.insert(0, str(_ROOT / "src"))
 # guard can never drift apart.
 sys.path.insert(0, str(_ROOT / "scripts"))
 from audit_leakage import max_jaccard_overlap, normalize  # noqa: E402
+from train_fusion import L2_TRAINING_OVERLAP  # noqa: E402
 
 _BENCH_DIR = _ROOT / "tests" / "benchmark" / "dataset"
 _DB_V2 = _ROOT / "src" / "prompt_armor" / "data" / "attacks" / "known_attacks_v2.jsonl"
@@ -64,12 +65,16 @@ _NEAR_DUP = 0.85  # token-Jaccard threshold for "near-duplicate"
 
 
 def _load_texts(path: Path) -> list[str]:
+    return [e["text"] for e in _load_entries(path)]
+
+
+def _load_entries(path: Path) -> list[dict]:
     out = []
     with open(path) as f:
         for line in f:
             line = line.strip()
             if line:
-                out.append(json.loads(line)["text"])
+                out.append(json.loads(line))
     return out
 
 
@@ -94,8 +99,9 @@ def collect_scores(refresh: bool) -> list[dict]:
 
     samples: list[dict] = []
     for path, label in [(_BENCH_DIR / "benign.jsonl", 0), (_BENCH_DIR / "malicious.jsonl", 1)]:
-        texts = _load_texts(path)
-        for i, text in enumerate(texts):
+        entries = _load_entries(path)
+        for i, entry in enumerate(entries):
+            text = entry["text"]
             # Stateless (no session_id) -> no inflammation accumulation across the run.
             result = engine.analyze(text)
             scores = {lr.layer: lr.score for lr in result.layer_results}
@@ -103,11 +109,12 @@ def collect_scores(refresh: bool) -> list[dict]:
                 {
                     "label": label,
                     "text": text,
+                    "source": entry.get("source"),
                     **{layer: scores.get(layer, 0.0) for layer in _LAYERS},
                 }
             )
             if (i + 1) % 200 == 0:
-                print(f"  {'benign' if label == 0 else 'malicious'}: {i + 1}/{len(texts)}")
+                print(f"  {'benign' if label == 0 else 'malicious'}: {i + 1}/{len(entries)}")
     engine.close()
 
     with open(_CACHE, "w") as f:
@@ -238,16 +245,20 @@ def evaluate(samples: list[dict], seeds: list[int], holdout_ratio: float) -> Non
 
     x_mal = np.array([features(s) for s in malicious])
     x_ben = np.array([features(s) for s in benign])
+    # Like train_fusion.py, never train on attacks L2 saw in its own training; and
+    # also report the holdout without them, where L2 cannot have memorized the text.
+    mal_overlap = np.array([s.get("source") in L2_TRAINING_OVERLAP for s in malicious])
 
-    agg = {k: [] for k in ("f1", "precision", "recall", "f1_at_050", "rec_in_db", "rec_out_db")}
+    agg = {k: [] for k in ("f1", "precision", "recall", "f1_at_050", "f1_no_overlap", "rec_in_db", "rec_out_db")}
 
     for seed in seeds:
         rng = np.random.default_rng(seed)
         mal_hold = group_split(mal_clusters, holdout_ratio, rng)
         ben_hold = group_split(ben_clusters, holdout_ratio, rng)
 
-        x_train = np.vstack([x_mal[~mal_hold], x_ben[~ben_hold]])
-        y_train = np.concatenate([np.ones((~mal_hold).sum()), np.zeros((~ben_hold).sum())]).astype(int)
+        mal_train = ~mal_hold & ~mal_overlap
+        x_train = np.vstack([x_mal[mal_train], x_ben[~ben_hold]])
+        y_train = np.concatenate([np.ones(mal_train.sum()), np.zeros((~ben_hold).sum())]).astype(int)
         x_test = np.vstack([x_mal[mal_hold], x_ben[ben_hold]])
         y_test = np.concatenate([np.ones(mal_hold.sum()), np.zeros(ben_hold.sum())]).astype(int)
 
@@ -259,6 +270,8 @@ def evaluate(samples: list[dict], seeds: list[int], holdout_ratio: float) -> Non
         agg["precision"].append(precision_score(y_test, pred, zero_division=0))
         agg["recall"].append(recall_score(y_test, pred))
         agg["f1_at_050"].append(f1_score(y_test, (prob_test >= 0.50).astype(int)))
+        keep = np.concatenate([~mal_overlap[mal_hold], np.ones(ben_hold.sum(), dtype=bool)])
+        agg["f1_no_overlap"].append(f1_score(y_test[keep], pred[keep]))
 
         # Held-out attack recall split by in-DB / out-of-DB.
         mal_prob = clf.predict_proba(x_mal[mal_hold])[:, 1]
@@ -280,6 +293,7 @@ def evaluate(samples: list[dict], seeds: list[int], holdout_ratio: float) -> Non
     print(f"  Held-out Precision:                       {stat('precision')}")
     print(f"  Held-out Recall:                          {stat('recall')}")
     print(f"  Held-out F1 @ fixed 0.50 threshold:       {stat('f1_at_050')}")
+    print(f"  Held-out F1 without L2-training sources:  {stat('f1_no_overlap')}")
     print("-" * 64)
     print("  Held-out attack recall, by DB overlap:")
     print(f"    in-DB  (near-dup in L3 index):          {stat('rec_in_db')}")

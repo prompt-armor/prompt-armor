@@ -32,12 +32,22 @@ jobs:
         run: |
           source .venv/bin/activate
           # Fails on a missing/degraded layer (0.9.1's silent L2 fallback) and if F1
-          # drops more than a point below the published figure (82.9% in-sample).
-          python tests/benchmark/run_benchmark.py --output benchmark_results.json --min-f1 0.819
+          # drops more than a point below the published figure (86.6% in-sample).
+          python tests/benchmark/run_benchmark.py --output benchmark_results.json --min-f1 0.856
+
+      - name: Language parity
+        run: |
+          source .venv/bin/activate
+          # Fails if benign text in PT/ES/DE/FR is blocked more than 5 points above
+          # English, or attacks in them are blocked more than 10 points below (0.9.2-0.9.3
+          # blocked ordinary Portuguese while the same sentences in English passed).
+          python tests/benchmark/run_language_parity.py --output language_parity.json
 
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-results
-          path: benchmark_results.json
+          path: |
+            benchmark_results.json
+            language_parity.json

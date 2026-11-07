@@ -28,15 +28,17 @@ Features:
 - Context modifiers reduce scores for quoted or educational content (hardened against exploitation — high-confidence matches are never dampened)
 - ReDoS-safe patterns (bounded quantifiers)
 
-## L2 — DeBERTa Classifier
+## L2 — Multilingual Classifier
 
-**Latency:** ~18ms median, ~55ms p95 (prompts up to 150 words, 2 threads, Apple M4) | **Dependencies:** onnxruntime
+**Latency:** ~5ms median, ~17ms p95 (prompts up to 150 words, 2 threads, Apple M4; 0.9.3's DeBERTa on the same machine: ~11ms / ~30ms) | **Dependencies:** onnxruntime
 
-[`protectai/deberta-v3-base-prompt-injection-v2`](https://huggingface.co/protectai/deberta-v3-base-prompt-injection-v2) (DeBERTa-v3-base, 184M params, Apache-2.0, fine-tuned by Protect AI), run via ONNX Runtime on CPU. Weights are stored as FP16 and cast to FP32 when the session loads, so scores match the upstream FP32 model on x86 and ARM alike; dynamic INT8 did not (98.5% agreement with FP32 on Apple Silicon, 94% on x86).
+[`Horizon-Labs/prompt-injection-guard-small`](https://huggingface.co/Horizon-Labs/prompt-injection-guard-small) (mmBERT-small, 141M params, Apache-2.0, fine-tuned by Horizon Labs from [mmBERT-small](https://huggingface.co/jhu-clsp/mmBERT-small), MIT), run via ONNX Runtime on CPU. Trained on direct injections and jailbreaks and on instructions planted in documents and tool outputs, with synthetic data in 30 languages. Only the embedding table is INT8 (dequantized by a lookup); every matmul runs in FP32, so scores are the same on x86 and ARM, which dynamic INT8 matmuls were not (0.9.2: 98.5% agreement with FP32 on Apple Silicon, 94% on x86).
 
-- Auto-downloads on first use from [`prompt-armor/l2-deberta-onnx`](https://huggingface.co/prompt-armor/l2-deberta-onnx) (~400MB, pinned by commit SHA). The project hosts its own copy: 0.9.1 depended on a third-party repo that was withdrawn (see CHANGELOG 0.9.2). Rebuild it with `scripts/export_l2_model.py`.
-- No score stretch: the model's P(injection) already spans 0-1 (benign median ~0.00; attacks bimodal near 0 or 1)
-- Upstream scope: English prompt injection. It does not target jailbreaks or non-English text — L1 (multilingual rules) and L3 cover those
+- Auto-downloads on first use from [`prompt-armor/l2-injection-guard-onnx`](https://huggingface.co/prompt-armor/l2-injection-guard-onnx) (~270MB, pinned by commit SHA), an unmodified copy of the upstream ONNX file with its LICENSE and NOTICE. The project hosts its own copy: 0.9.1 depended on a third-party repo that was withdrawn (see CHANGELOG 0.9.2). Rebuild it with `scripts/export_l2_model.py`, which checks the upstream SHA256SUMS.
+- Inputs are truncated at 512 tokens; longer texts are covered by the engine's 200-word windows.
+- No score stretch: the model's P(injection) already spans 0-1.
+- Replaced Protect AI's English-only DeBERTa-v3-base in 0.9.4. That model scored ordinary Portuguese as injection (0.95-1.00 on "Quero cancelar minha assinatura", 0.00 on its English translation); see CHANGELOG 0.9.4. `tests/unit/test_l2_classifier.py::TestL2LanguageParity` and `tests/benchmark/run_language_parity.py` keep it from coming back.
+- Training-data overlap with the internal benchmark (exact text match against its listed datasets): all 119 `jailbreak-classification` attacks, 70 of the 100 JailbreakBench ones and 11 of the 247 jayavibhav ones. The fusion is trained without the first two sources (`scripts/train_fusion.py`, `L2_TRAINING_OVERLAP`).
 - Falls back to a keyword heuristic if the model cannot be loaded; that state is logged, exposed as `LiteEngine.degraded_layers`, fails `tests/unit/test_l2_classifier.py`, and makes the benchmark refuse to report numbers
 
 ## L3 — Semantic Similarity (Contrastive)
