@@ -182,12 +182,36 @@ def _normalize_text(text: str) -> str:
     return text
 
 
+# Per-layer time budget, counted from when the layer starts running (not from
+# when it was queued): concurrent analyze() calls share one pool, and counting the
+# queue made 12 concurrent callers skip L2/L4 thousands of times (fail-open) in a
+# downstream study, measuring a different detector without telling the caller.
+_LAYER_TIMEOUT_S = 2.0
+# Queue wait is bounded only so a pool clogged by hung layers cannot block forever.
+_QUEUE_TIMEOUT_S = 30.0
+
 # Sliding window config
 _WINDOW_WORD_THRESHOLD = 150
 _WINDOW_SIZE = 200
 _WINDOW_STRIDE = 100
 _MAX_SEGMENTS = 10
 _MAX_INPUT_CHARS = 50_000
+
+
+class _LayerStart:
+    """Set by the pool thread when a layer starts running."""
+
+    __slots__ = ("event", "at")
+
+    def __init__(self) -> None:
+        self.event = threading.Event()
+        self.at = 0.0
+
+
+def _run_layer(layer: BaseLayer, text: str, start: _LayerStart) -> Any:
+    start.at = time.perf_counter()
+    start.event.set()
+    return layer.analyze(text)
 
 
 def _segment_text(text: str) -> list[str]:
@@ -288,7 +312,9 @@ class LiteEngine:
         regex is bounded by L1's own per-search timeout.
 
         Uses per-layer timeout and fail-open: if a layer hangs or crashes,
-        analysis proceeds with the remaining layers.
+        analysis proceeds with the remaining layers. The timeout counts from when
+        the layer starts, so time queued behind other callers' layers (concurrent
+        use of one engine) never skips a layer.
         """
         layer_results = []
         for layer in self._layers:
@@ -297,11 +323,18 @@ class LiteEngine:
                     layer_results.append(layer.analyze(text))
                 except Exception as e:
                     logger.warning("Layer %s failed: %s, skipping", layer.name, e)
-        futures = {self._pool.submit(layer.analyze, text): layer.name for layer in self._layers if not layer.run_first}
-        for future in futures:
-            layer_name = futures[future]
+        pending = []
+        for layer in self._layers:
+            if not layer.run_first:
+                started = _LayerStart()
+                pending.append((layer.name, self._pool.submit(_run_layer, layer, text, started), started))
+        for layer_name, future, started in pending:
             try:
-                result = future.result(timeout=2.0)
+                if not started.event.wait(timeout=_QUEUE_TIMEOUT_S):
+                    logger.warning("Layer %s still queued after %.0fs, skipping", layer_name, _QUEUE_TIMEOUT_S)
+                    continue
+                remaining = started.at + _LAYER_TIMEOUT_S - time.perf_counter()
+                result = future.result(timeout=max(remaining, 0.0))
                 layer_results.append(result)
             except FuturesTimeoutError:
                 logger.warning("Layer %s timed out, skipping", layer_name)

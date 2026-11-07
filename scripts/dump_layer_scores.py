@@ -71,6 +71,7 @@ def dump_scores(output_path: Path) -> None:
                         "l3_similarity": layer_scores.get("l3_similarity", 0.0),
                         "l4_structural": layer_scores.get("l4_structural", 0.0),
                         "l5_negative_selection": layer_scores.get("l5_negative_selection", 0.0),
+                        "source": entry.get("source"),
                         "text_preview": entry["text"][:80],
                     }
                 )

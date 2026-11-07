@@ -4,6 +4,55 @@ All notable changes to prompt-armor will be documented in this file.
 
 ## [Unreleased]
 
+## [0.9.4] - 2026-11-06
+
+Fix release: the L2 classifier that 0.9.2 introduced is English-only, and it scored ordinary Portuguese, Spanish, German and French as prompt injection, so benign non-English text was blocked several times more often than the same text in English. L2 now runs a multilingual model built for documents and tool outputs, the fusion is retrained without the attacks that model saw in training, CI checks false positives and detection per language, and the per-layer timeout no longer skips layers when one engine serves concurrent callers. No API changes.
+
+### What happened
+- 0.9.2 replaced the withdrawn L2 model with Protect AI's `deberta-v3-base-prompt-injection-v2`, whose authors scope it to English. Our docs said it "does not target non-English text". It does not ignore it either: it scores it as injection. "Quero cancelar minha assinatura" scored 1.00 and "Bom dia! Gostaria de saber o prazo de entrega." 0.99, while their English translations scored 0.00.
+- A study of indirect prompt injection in small-business agent workflows, in Portuguese and English (not yet published), measured it by running 0.9.3 over the 3,100 tool outputs of every reference trajectory, with and without two kinds of planted instructions. Re-run on a quiet machine with zero skipped layers, both versions on the same outputs:
+
+  | | 0.9.3 EN | 0.9.3 PT | **0.9.4 EN** | **0.9.4 PT** |
+  |---|---|---|---|---|
+  | Benign tool outputs blocked | 10.7% | 33.4% | **7.3%** | **7.6%** |
+  | Benign episodes with at least one block | 23.8% | 65.0% | **12.5%** | **13.1%** |
+  | Outputs carrying attack 1 blocked | 20.2% | 82.6% | **45.6%** | **80.9%** |
+  | Outputs carrying attack 2 blocked | 14.2% | 72.8% | **34.0%** | **87.5%** |
+
+  0.9.3's high detection in Portuguese was largely the same bias. The false positives 0.9.4 still has are short tool confirmations ("Email e03 moved to invoices.") in one of the four workflows, equally in both languages.
+- Nothing in CI looked at non-English benign text, while the README listed PT, DE, ES and FR as supported.
+
+### Fixed
+- **L2 now runs [`Horizon-Labs/prompt-injection-guard-small`](https://huggingface.co/Horizon-Labs/prompt-injection-guard-small)** (mmBERT-small, 141M parameters, Apache-2.0, fine-tuned by Horizon Labs from MIT-licensed [mmBERT-small](https://huggingface.co/jhu-clsp/mmBERT-small)), trained on direct injections and on instructions planted in documents and tool outputs, in 30 languages. Hosted unmodified, with its LICENSE and NOTICE, at [`prompt-armor/l2-injection-guard-onnx`](https://huggingface.co/prompt-armor/l2-injection-guard-onnx) and pinned by commit; `scripts/export_l2_model.py` rebuilds it from the pinned upstream revision and checks the upstream SHA256SUMS.
+  - Only the embedding table is INT8; every matmul runs in FP32, so scores match on x86 and ARM (600 of 600 decisions identical between arm64 and x86_64, largest score difference 0.000006). The download drops from ~400MB to ~270MB.
+  - New model directory (`data/models/l2-injection-guard-onnx/`), so an upgraded install never pairs 0.9.3's cached DeBERTa with the new fusion weights.
+  - Alternatives measured before choosing: ignoring L2 when the text is not English removed the false positives but cut the share of Portuguese attacks blocked from 93% to 4% (and French from 94% to 3%) on public multilingual injections; running both models by language would have meant ~670MB of downloads and a language detector in the hot path.
+- **Fusion meta-classifier retrained without L2's training data.** By exact text match against the datasets Horizon Labs lists, L2 was trained on all 119 `jailbreak-classification` attacks of the benchmark, 70 of the 100 JailbreakBench ones and 11 of the 247 jayavibhav ones. `train_fusion.py` now leaves out the first two sources (`L2_TRAINING_OVERLAP`; `--include-overlap` restores the old behavior), and `eval_holdout.py` never trains on them either. Training on everything would have scored 89.4% in-sample, but with 75 false positives instead of 43 and a lower F1 on the attacks L2 had not seen (88.5% vs 89.8%): the fusion learned to trust L2 on text it had memorized.
+- **The per-layer timeout no longer counts time spent queued.** The engine gave each layer 2s from the moment it was submitted to the shared thread pool, not from when it started. With many callers on one engine, layers waited in the queue past the budget and were skipped fail-open: the study above, scanning tool outputs from 12 concurrent agent connections, logged 12,784 skipped L2/L4 runs in one session, so it measured a weaker detector than the one it named. The budget now starts when the layer runs; queue waits are bounded at 30s only so a pool clogged by hung layers cannot block forever (`tests/unit/test_engine_concurrency.py`).
+
+### Added
+- **Language parity in CI.** `tests/benchmark/run_language_parity.py` runs the full engine over 864 texts in EN, PT, ES, DE and FR (`tests/benchmark/dataset/language_parity.jsonl`; sources and licenses in `LANGUAGE_PARITY.md`): small-business messages and tool outputs written in English and Brazilian Portuguese, the same 100 Amazon MASSIVE assistant commands in each language, and 40 public prompt injections per language. The `Benchmark` workflow runs it on every pull request and fails if a language's benign texts are blocked more than 5 points above English or its attacks more than 10 points below. 0.9.3 fails it (Portuguese 30.9% vs English 7.9%). `tests/unit/test_l2_classifier.py::TestL2LanguageParity` checks the same at the layer level.
+
+### Changed — published metrics, re-measured
+These replace the 0.9.2–0.9.3 figures everywhere (`tests/test_metrics_consistency.py` enforces it). The in-sample rows are the CI `Benchmark` workflow's (Linux x86), the lower of two runs of the same code (86.6% and 86.8%; Apple M2 Pro 86.7%, Apple M4 86.6%), because L3 is still INT8; the rest were measured with both versions back to back on the same quiet machine (Apple M2 Pro unless stated), zero skipped layers.
+
+| | 0.9.3 | **0.9.4** |
+|---|---|---|
+| Internal F1, in-sample (1,534 samples, CI) | 82.9% (P 89.5%, R 77.2%) | **86.6%** (P 91.5%, R 82.1%) |
+| False positives / missed attacks (CI) | 51 / 129 | **43 / 101** |
+| Out-of-sample F1 (10 cluster splits) | 84.2% ± 1.5% | **86.7% ± 1.5%** |
+| Without the 119 jailbreak-classification attacks (Apple M2 Pro) | 78.8% | **83.7%** |
+| External F1 (jayavibhav 1K) | 97.91% (98.22% on Apple M4) | **95.08%** |
+| Adversarial suite: attacks caught, benign flagged | 75/77, 4/26 | **77/77**, 6/26 |
+| Benign blocked, EN / PT / ES / DE / FR (language parity set) | 7.9 / 30.9 / 20.0 / 13.0 / 11.0% | **7.2 / 5.3 / 3.0 / 4.0 / 4.0%** |
+| Warm latency, average / median (quiet Apple M4) | 31 / 13ms (published: ~50 / ~19ms) | **17 / 6ms** |
+| Warm latency, average (CI runner, 4 vCPU) | 112ms | **54ms** |
+| L2 download | ~400MB | **~270MB** |
+
+- Where 0.9.4 is worse: the external jayavibhav set (98.22% → 95.08%; 12 false positives and 18 missed attacks out of 1,000, vs 6 and 5) and the benchmark's own jayavibhav attacks (recall 97.6% → 94.7%). The English-only model fit that dataset better.
+- Where it is better: the deepset test split (recall 62.7% → 72.9%), JailbreakBench (6% → 35%, though 70 of those 100 are in L2's training data), the two adversarial attacks 0.9.3 missed (leetspeak and a Russian "ignore your instructions"), and non-English text overall.
+- Latency halves: the new model is smaller (141M parameters vs 184M) and its ModernBERT architecture is faster per call. The headline drops from ~50ms to ~17ms: 0.9.3's ~50ms on Apple M4 was measured on a busy machine and re-measures at ~31ms on a quiet one, so about half of the drop is the model and half the measurement. Apple M2 Pro: 100 → 52ms.
+
 ## [0.9.3] - 2026-11-06
 
 Patch release: results no longer depend on machine load, and the benchmark's small CPU-type variance is disclosed. No API or model changes.
