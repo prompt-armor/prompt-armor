@@ -41,7 +41,9 @@ def dump_scores(output_path: Path) -> None:
     print(f"Active layers: {engine.active_layers}")
     if engine.degraded_layers:
         engine.close()
-        sys.exit(f"Refusing to dump training scores: degraded layers {engine.degraded_layers} (fallback scores, not the shipped models).")
+        sys.exit(
+            f"Refusing to dump training scores: degraded layers {engine.degraded_layers} (fallback scores, not the shipped models)."
+        )
 
     samples: list[dict] = []
 
@@ -76,7 +78,13 @@ def dump_scores(output_path: Path) -> None:
                     }
                 )
 
+    skipped = engine.skipped_layers
     engine.close()
+    if skipped:
+        # A skipped layer was recorded as 0.0 above: the fusion would learn from scores the
+        # shipped engine never produces. Happens when the machine is too loaded for the
+        # per-layer timeout.
+        sys.exit(f"Refusing to write training scores: layer runs skipped {skipped}. Re-run on an idle machine.")
 
     with open(output_path, "w") as f:
         json.dump(samples, f, indent=2)
