@@ -4,6 +4,9 @@ All notable changes to prompt-armor will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **The per-layer timeout no longer counts time spent queued.** The engine gave each layer 2s from the moment it was submitted to the shared thread pool, not from when it started. With many callers on one engine, layers waited in the queue past the budget and were skipped fail-open: a study scanning agent tool outputs from 12 concurrent connections logged 12,784 skipped L2/L4 runs in one session, so it measured a weaker detector than the one it named. The budget now starts when the layer runs; queue waits are bounded at 30s only so a pool clogged by hung layers cannot block forever (`tests/unit/test_engine_concurrency.py`).
+
 ## [0.9.3] - 2026-11-06
 
 Patch release: results no longer depend on machine load, and the benchmark's small CPU-type variance is disclosed. No API or model changes.

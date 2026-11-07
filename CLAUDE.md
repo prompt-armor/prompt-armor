@@ -59,7 +59,7 @@ INPUT → NORMALIZE → SEGMENT (if >150 words) → [L1 | L2 | L3 | L4 | L5] →
 
 The core pipeline runs 5 analysis layers **in parallel** via `ThreadPoolExecutor`, feeds scores into a trained logistic regression meta-classifier, and applies deterministic decision thresholds (optional downward-only jitter):
 
-- **`engine.py` (LiteEngine)** — Orchestrates: Unicode normalization, sliding window segmentation, parallel layer dispatch, per-layer timeout (2s) with fail-open. **Inflammation cascade**: per-session threat awareness (keyed by `session_id`, stateless by default) with exponential decay.
+- **`engine.py` (LiteEngine)** — Orchestrates: Unicode normalization, sliding window segmentation, parallel layer dispatch, per-layer timeout (2s, counted from when the layer starts, not from when it was queued) with fail-open. **Inflammation cascade**: per-session threat awareness (keyed by `session_id`, stateless by default) with exponential decay.
 - **`layers/l1_regex.py`** — 40+ English + 20 multilingual (DE/ES/FR/PT) weighted regex rules. Context modifier exploit hardened (high scores not dampened).
 - **`layers/l2_classifier.py`** — Protect AI's DeBERTa-v3-base prompt injection classifier (184M params, Apache-2.0), ONNX with FP16 weights cast to FP32 at load (INT8 gave different answers on x86 and ARM). Auto-downloads from `prompt-armor/l2-deberta-onnx` (our own HF copy, pinned) on first use. Falls back to a keyword heuristic, reported via `degraded` / `LiteEngine.degraded_layers`.
 - **`layers/l3_similarity.py`** — **Contrastive fine-tuned** MiniLM-L12-v2 + exact FAISS cosine search against 1,509 curated attacks (v2 DB, deduplicated from 25,160 raw). Intent-based matching (not topic-based).
