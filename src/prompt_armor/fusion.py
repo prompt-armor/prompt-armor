@@ -18,34 +18,34 @@ from collections import Counter
 from prompt_armor.config import ShieldConfig
 from prompt_armor.models import Category, Decision, Evidence, LayerResult, ShieldResult
 
-# --- Trained meta-classifier coefficients (v6 — L2 swapped to Horizon Labs' multilingual guard, v0.9.4) ---
+# --- Trained meta-classifier coefficients (v7 — L3 computes in FP32, v0.9.5) ---
 # scripts/train_fusion.py on the 1,534-sample benchmark minus the attacks whose
 # source dataset is in L2's training data (jailbreak-classification, jailbreakbench),
 # 70/30 stratified split, 5-fold CV on the 70%. Non-negative by construction:
-# features whose weight came out negative (l4_structural, min_score, l1 × l4
-# interaction) are pinned to 0 and the rest refit, so raising a layer's score can
+# features whose weight came out negative (l4_structural, l5_negative_selection,
+# l1 × l4 interaction) are pinned to 0 and the rest refit, so raising a layer's score can
 # never lower the fused risk.
-# The F1-optimal threshold (0.42), picked on the held-out 30% by scoring the
+# The F1-optimal threshold (0.43), picked on the held-out 30% by scoring the
 # deployed decision function (hard block + L3-solo dampening), is folded into
 # the intercept, so the decision threshold stays at 0.50.
 _META_COEFS = [
-    0.0697,  # l1_regex
-    0.6958,  # l2_classifier
-    0.7141,  # l3_similarity
+    0.07,  # l1_regex
+    0.4649,  # l2_classifier
+    0.5014,  # l3_similarity
     0.0,  # l4_structural  (pinned to 0 at train time)
-    0.0116,  # l5_negative_selection
-    0.7448,  # max_score
-    0.0,  # min_score  (pinned to 0 at train time)
+    0.0,  # l5_negative_selection  (pinned to 0 at train time)
+    0.5208,  # max_score
+    0.0005,  # min_score
     0.0,  # l1 × l4 interaction  (pinned to 0 at train time)
-    0.542,  # l2 × l3 interaction
-    1.2346,  # n_layers_above_0.1 (L5 excluded from count)
+    0.3879,  # l2 × l3 interaction
+    1.0251,  # n_layers_above_0.1 (L5 excluded from count)
 ]
-_META_INTERCEPT = -2.3131
+_META_INTERCEPT = -1.7731
 _META_THRESHOLD = 0.50  # Optimal F1 threshold (folded into the intercept)
 
 # --- Isotonic calibration (raw_score → calibrated P(attack)) ---
-# Fit via IsotonicRegression on the held-out 30% (v6 coefficients).
-# ECE before: 0.0966, after: 0.0 (on the same held-out split).
+# Fit via IsotonicRegression on the held-out 30% (v7 coefficients).
+# ECE before: 0.1309, after: 0.0 (on the same held-out split).
 # Piecewise-linear lookup for zero-dependency runtime.
 _CALIBRATION_POINTS: list[tuple[float, float]] = [
     (0.0, 0.0),
@@ -54,21 +54,21 @@ _CALIBRATION_POINTS: list[tuple[float, float]] = [
     (0.15, 0.0),
     (0.2, 0.0),
     (0.25, 0.0),
-    (0.3, 0.0303),
-    (0.35, 0.0303),
-    (0.4, 0.2),
-    (0.45, 0.5385),
-    (0.5, 0.5385),
-    (0.55, 0.5385),
-    (0.6, 0.5385),
-    (0.65, 0.5385),
-    (0.7, 0.5385),
-    (0.75, 0.5424),
-    (0.8, 0.6094),
-    (0.85, 0.625),
-    (0.9, 0.6976),
-    (0.95, 0.875),
-    (1.0, 0.9432),
+    (0.3, 0.0345),
+    (0.35, 0.0345),
+    (0.4, 0.0345),
+    (0.45, 0.3333),
+    (0.5, 0.3848),
+    (0.55, 0.5556),
+    (0.6, 0.5556),
+    (0.65, 0.5556),
+    (0.7, 0.5556),
+    (0.75, 0.6555),
+    (0.8, 0.6667),
+    (0.85, 0.6667),
+    (0.9, 0.7143),
+    (0.95, 0.8886),
+    (1.0, 0.9444),
 ]
 
 
