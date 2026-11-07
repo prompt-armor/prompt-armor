@@ -6,7 +6,7 @@ surfaces only — NOT the CHANGELOG or the dated blog post (legitimate historica
 records) and NOT docs/layers.md (per-layer technical latencies).
 
 Canonical framing (decided 2026-06, re-measured for 0.9.5 after L3 moved to
-FP32 compute): F1 86.5% internal (1,534-sample, CI, same on any CPU) / 95.08%
+FP32 compute): F1 86.5% internal (1,534-sample, CI, same on every CPU tested) / 95.08%
 external (jayavibhav, same-distribution). Latency ~17ms warm average (Apple M4).
 The out-of-sample validation figure (86.7%, scripts/eval_holdout.py) is also allowed.
 """
