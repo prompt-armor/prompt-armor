@@ -32,8 +32,8 @@ jobs:
         run: |
           source .venv/bin/activate
           # Fails on a missing/degraded layer (0.9.1's silent L2 fallback) and if F1
-          # drops more than a point below the published figure (86.8% in-sample).
-          python tests/benchmark/run_benchmark.py --output benchmark_results.json --min-f1 0.858
+          # drops more than a point below the published figure (86.6% in-sample).
+          python tests/benchmark/run_benchmark.py --output benchmark_results.json --min-f1 0.856
 
       - name: Language parity
         run: |

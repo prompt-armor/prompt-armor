@@ -123,7 +123,7 @@ def main() -> None:
         "test-set tuning (#3) + benign-side L3 training (#2). The held-out, "
         "out-of-DB number is now measured in scripts/eval_holdout.py: a cluster-aware "
         "70/30 split with the threshold picked on train only scores F1 86.7% +/- 1.5% "
-        "(out-of-DB recall 81%), within a tenth of the in-sample 86.8% -- so the "
+        "(out-of-DB recall 81%), within a tenth of the in-sample 86.6% -- so the "
         "benchmark is not materially leakage-inflated."
     )
 

@@ -32,12 +32,12 @@ Fix release: the L2 classifier that 0.9.2 introduced is English-only, and it sco
 - **Language parity in CI.** `tests/benchmark/run_language_parity.py` runs the full engine over 864 texts in EN, PT, ES, DE and FR (`tests/benchmark/dataset/language_parity.jsonl`; sources and licenses in `LANGUAGE_PARITY.md`): small-business messages and tool outputs written in English and Brazilian Portuguese, the same 100 Amazon MASSIVE assistant commands in each language, and 40 public prompt injections per language. The `Benchmark` workflow runs it on every pull request and fails if a language's benign texts are blocked more than 5 points above English or its attacks more than 10 points below. 0.9.3 fails it (Portuguese 30.9% vs English 7.9%). `tests/unit/test_l2_classifier.py::TestL2LanguageParity` checks the same at the layer level.
 
 ### Changed — published metrics, re-measured
-These replace the 0.9.2–0.9.3 figures everywhere (`tests/test_metrics_consistency.py` enforces it). The in-sample rows are the CI `Benchmark` workflow's (Linux x86; Apple M2 Pro 86.7%, Apple M4 86.6%, because L3 is still INT8); the rest were measured with both versions back to back on the same quiet machine (Apple M2 Pro unless stated), zero skipped layers.
+These replace the 0.9.2–0.9.3 figures everywhere (`tests/test_metrics_consistency.py` enforces it). The in-sample rows are the CI `Benchmark` workflow's (Linux x86), the lower of two runs of the same code (86.6% and 86.8%; Apple M2 Pro 86.7%, Apple M4 86.6%), because L3 is still INT8; the rest were measured with both versions back to back on the same quiet machine (Apple M2 Pro unless stated), zero skipped layers.
 
 | | 0.9.3 | **0.9.4** |
 |---|---|---|
-| Internal F1, in-sample (1,534 samples, CI) | 82.9% (P 89.5%, R 77.2%) | **86.8%** (P 91.6%, R 82.5%) |
-| False positives / missed attacks (CI) | 51 / 129 | **43 / 99** |
+| Internal F1, in-sample (1,534 samples, CI) | 82.9% (P 89.5%, R 77.2%) | **86.6%** (P 91.5%, R 82.1%) |
+| False positives / missed attacks (CI) | 51 / 129 | **43 / 101** |
 | Out-of-sample F1 (10 cluster splits) | 84.2% ± 1.5% | **86.7% ± 1.5%** |
 | Without the 119 jailbreak-classification attacks | 79.2% | **83.7%** |
 | External F1 (jayavibhav 1K) | 97.91% (98.22% on Apple M4) | **95.08%** |
