@@ -30,7 +30,7 @@ Features:
 
 ## L2 — Multilingual Classifier
 
-**Latency:** ~14ms median, ~57ms p95 (prompts up to 150 words, 2 threads, Apple M2 Pro; 0.9.3's DeBERTa on the same machine: ~27ms / ~110ms) | **Dependencies:** onnxruntime
+**Latency:** ~5ms median, ~17ms p95 (prompts up to 150 words, 2 threads, Apple M4; 0.9.3's DeBERTa on the same machine: ~11ms / ~30ms) | **Dependencies:** onnxruntime
 
 [`Horizon-Labs/prompt-injection-guard-small`](https://huggingface.co/Horizon-Labs/prompt-injection-guard-small) (mmBERT-small, 141M params, Apache-2.0, fine-tuned by Horizon Labs from [mmBERT-small](https://huggingface.co/jhu-clsp/mmBERT-small), MIT), run via ONNX Runtime on CPU. Trained on direct injections and jailbreaks and on instructions planted in documents and tool outputs, with synthetic data in 30 languages. Only the embedding table is INT8 (dequantized by a lookup); every matmul runs in FP32, so scores are the same on x86 and ARM, which dynamic INT8 matmuls were not (0.9.2: 98.5% agreement with FP32 on Apple Silicon, 94% on x86).
 

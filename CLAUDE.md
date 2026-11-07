@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-prompt-armor is an open-core LLM prompt security analysis tool. It detects prompt injections, jailbreaks, and other attacks against LLMs. The Lite engine runs 5 analysis layers in parallel, fuses scores via a trained meta-classifier, and returns decisions in ~50ms (warm average on Apple M2 Pro; median ~16ms) offline. **Canonical metrics: F1 86.7% internal (1,534-sample) / 95.08% external (jayavibhav 1K, same-distribution).** When citing metrics anywhere (README, docs, integrations), use exactly these two numbers — `tests/test_metrics_consistency.py` enforces it.
+prompt-armor is an open-core LLM prompt security analysis tool. It detects prompt injections, jailbreaks, and other attacks against LLMs. The Lite engine runs 5 analysis layers in parallel, fuses scores via a trained meta-classifier, and returns decisions in ~17ms (warm average on Apple M4; median ~6ms) offline. **Canonical metrics: F1 86.8% internal (1,534-sample) / 95.08% external (jayavibhav 1K, same-distribution).** When citing metrics anywhere (README, docs, integrations), use exactly these two numbers — `tests/test_metrics_consistency.py` enforces it.
 
 ## Commands
 

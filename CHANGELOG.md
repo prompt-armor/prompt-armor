@@ -31,23 +31,24 @@ Fix release: the L2 classifier that 0.9.2 introduced is English-only, and it sco
 - **Language parity in CI.** `tests/benchmark/run_language_parity.py` runs the full engine over 864 texts in EN, PT, ES, DE and FR (`tests/benchmark/dataset/language_parity.jsonl`; sources and licenses in `LANGUAGE_PARITY.md`): small-business messages and tool outputs written in English and Brazilian Portuguese, the same 100 Amazon MASSIVE assistant commands in each language, and 40 public prompt injections per language. The `Benchmark` workflow runs it on every pull request and fails if a language's benign texts are blocked more than 5 points above English or its attacks more than 10 points below. 0.9.3 fails it (Portuguese 30.9% vs English 7.9%). `tests/unit/test_l2_classifier.py::TestL2LanguageParity` checks the same at the layer level.
 
 ### Changed — published metrics, re-measured
-These replace the 0.9.2–0.9.3 figures everywhere (`tests/test_metrics_consistency.py` enforces it). Both versions measured back to back on the same quiet machine (Apple M2 Pro), zero skipped layers, except the headline in-sample figure, which is the CI `Benchmark` workflow's (Linux x86).
+These replace the 0.9.2–0.9.3 figures everywhere (`tests/test_metrics_consistency.py` enforces it). The in-sample rows are the CI `Benchmark` workflow's (Linux x86; Apple M2 Pro 86.7%, Apple M4 86.6%, because L3 is still INT8); the rest were measured with both versions back to back on the same quiet machine (Apple M2 Pro unless stated), zero skipped layers.
 
 | | 0.9.3 | **0.9.4** |
 |---|---|---|
-| Internal F1, in-sample (1,534 samples) | 82.9% (P 89.5%, R 77.2%) | **86.7%** (P 91.5%, R 82.3%) |
-| False positives / missed attacks | 51 / 129 | **43 / 100** |
+| Internal F1, in-sample (1,534 samples, CI) | 82.9% (P 89.5%, R 77.2%) | **86.8%** (P 91.6%, R 82.5%) |
+| False positives / missed attacks (CI) | 51 / 129 | **43 / 99** |
 | Out-of-sample F1 (10 cluster splits) | 84.2% ± 1.5% | **86.7% ± 1.5%** |
 | Without the 119 jailbreak-classification attacks | 79.2% | **83.7%** |
 | External F1 (jayavibhav 1K) | 97.91% (98.22% on Apple M4) | **95.08%** |
 | Adversarial suite: attacks caught, benign flagged | 75/77, 4/26 | **77/77**, 6/26 |
 | Benign blocked, EN / PT / ES / DE / FR (language parity set) | 7.9 / 30.9 / 20.0 / 13.0 / 11.0% | **7.2 / 5.3 / 3.0 / 4.0 / 4.0%** |
-| Warm latency, average / median (Apple M2 Pro) | 100 / 29ms | **52 / 16ms** |
+| Warm latency, average / median (quiet Apple M4) | 31 / 13ms (published: ~50 / ~19ms) | **17 / 6ms** |
+| Warm latency, average (CI runner, 4 vCPU) | 112ms | **54ms** |
 | L2 download | ~400MB | **~270MB** |
 
 - Where 0.9.4 is worse: the external jayavibhav set (98.22% → 95.08%; 12 false positives and 18 missed attacks out of 1,000, vs 6 and 5) and the benchmark's own jayavibhav attacks (recall 97.6% → 94.7%). The English-only model fit that dataset better.
 - Where it is better: the deepset test split (recall 62.7% → 72.9%), JailbreakBench (6% → 35%, though 70 of those 100 are in L2's training data), the two adversarial attacks 0.9.3 missed (leetspeak and a Russian "ignore your instructions"), and non-English text overall.
-- Latency halves: the new model is smaller (141M parameters vs 184M) and its ModernBERT architecture is faster per call. The published reference machine moves from Apple M4 (where 0.9.3 measured ~50ms) to Apple M2 Pro, the quiet machine both versions were measured on; the headline stays ~50ms on the slower chip.
+- Latency halves: the new model is smaller (141M parameters vs 184M) and its ModernBERT architecture is faster per call. The headline drops from ~50ms to ~17ms: 0.9.3's ~50ms on Apple M4 was measured on a busy machine and re-measures at ~31ms on a quiet one, so about half of the drop is the model and half the measurement. Apple M2 Pro: 100 → 52ms.
 
 ## [0.9.3] - 2026-11-06
 

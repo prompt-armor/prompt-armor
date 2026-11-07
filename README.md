@@ -2,7 +2,7 @@
   <h1 align="center">prompt-armor</h1>
   <p align="center">
     <strong>The open-source firewall for LLM prompts.</strong><br>
-    Detect prompt injections, jailbreaks, and attacks in ~50ms. No LLM needed. Runs offline.
+    Detect prompt injections, jailbreaks, and attacks in ~17ms. No LLM needed. Runs offline.
   </p>
   <p align="center">
     <a href="https://github.com/prompt-armor/prompt-armor/actions"><img src="https://img.shields.io/github/actions/workflow/status/prompt-armor/prompt-armor/ci.yml?style=flat-square&label=tests" alt="CI"></a>
@@ -16,7 +16,7 @@
 
 Most LLM security tools either need an LLM to work (circular dependency), cost money per request, or return a useless binary "safe/unsafe" with no explanation.
 
-**prompt-armor** runs 5 analysis layers in parallel, fuses their scores via a trained meta-classifier, and tells you *exactly* what was detected, with evidence and confidence — in ~50ms, offline, for free.
+**prompt-armor** runs 5 analysis layers in parallel, fuses their scores via a trained meta-classifier, and tells you *exactly* what was detected, with evidence and confidence — in ~17ms, offline, for free.
 
 ```bash
 pip install prompt-armor
@@ -46,7 +46,7 @@ result.latency_ms   # 12.4
 | Detection layers | **5 (fused) + council** | 1 per scanner | 1 (LLM) | ? (proprietary) | 6 (independent) |
 | Score fusion | **Trained meta-classifier** | None | N/A | ? | None |
 | Attack categories | **8** | Binary | N/A | Multi | Binary |
-| Avg latency | **~50ms** | 200-500ms | 1-3s | ~50ms | ~100ms |
+| Avg latency | **~17ms** | 200-500ms | 1-3s | ~50ms | ~100ms |
 | MCP Server | **Yes** | No | No | No | No |
 | CI/CD exit codes | **Yes** | No | No | No | No |
 | License | **Apache 2.0** | MIT | Apache 2.0 | Proprietary | Apache 2.0 |
@@ -245,12 +245,12 @@ We report **two numbers** — the harder internal benchmark and the same-distrib
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| **F1 Score** | **86.7%** | Canonical headline metric, as measured by the CI `Benchmark` workflow (Linux x86). Can vary by a few tenths across CPU types because L3's embedding model is still INT8; see [docs/benchmark.md](docs/benchmark.md) |
-| **Precision** | 91.5% | 43 false positives out of 969 benign |
-| **Recall** | 82.3% | 100 of 565 attacks pass, ~1 in 6 |
-| **Avg Latency** | ~50ms | Warm, Apple M2 Pro, where 0.9.3 measures ~100ms; median ~16ms. Inputs over 150 words are also scanned in overlapping windows, which pulls the average up. First call adds a one-time model download (~270MB) and load |
+| **F1 Score** | **86.8%** | Canonical headline metric, as measured by the CI `Benchmark` workflow (Linux x86). Varies by CPU type (86.6% to 86.8%) because L3's embedding model is still INT8; see [docs/benchmark.md](docs/benchmark.md) |
+| **Precision** | 91.6% | 43 false positives out of 969 benign |
+| **Recall** | 82.5% | 99 of 565 attacks pass, ~1 in 6 |
+| **Avg Latency** | ~17ms | Warm, quiet Apple M4, where 0.9.3 measures ~31ms; median ~6ms; ~54ms on the 4-vCPU CI runner. Inputs over 150 words are also scanned in overlapping windows, which pulls the average up. First call adds a one-time model download (~270MB) and load |
 
-> **Honesty note — leakage audited, not asserted.** The shipped fusion thresholds/coefficients are tuned on this benchmark, so 86.7% is an *in-sample* number. We measured the honest out-of-sample counterpart with [`scripts/eval_holdout.py`](scripts/eval_holdout.py): a **cluster-aware 70/30 split** (no held-out attack shares a near-duplicate with train) with the decision **threshold selected on train only**, averaged over 10 splits → **86.7% ± 1.5%**, the same as the in-sample figure. So the benchmark is **not materially leakage-inflated** by the fusion tuning. One overlap we cannot measure away: L2's training data contains, by exact text, all 119 `jackhhao/jailbreak-classification` attacks, 70 of the 100 JailbreakBench ones and 11 of the 247 jayavibhav ones; the fusion is trained without the first two sources, and without the 119 jackhhao attacks in-sample F1 is 83.7%. On attacks with *no* near-duplicate in the L3 index (the zero-day case), recall holds at **82%**; benchmark↔attack-DB overlap is ~1.9% (guarded by `tests/test_no_leakage.py`). Reproduce: `python scripts/eval_holdout.py`.
+> **Honesty note — leakage audited, not asserted.** The shipped fusion thresholds/coefficients are tuned on this benchmark, so 86.8% is an *in-sample* number. We measured the honest out-of-sample counterpart with [`scripts/eval_holdout.py`](scripts/eval_holdout.py): a **cluster-aware 70/30 split** (no held-out attack shares a near-duplicate with train) with the decision **threshold selected on train only**, averaged over 10 splits → **86.7% ± 1.5%**, within a tenth of the in-sample figure. So the benchmark is **not materially leakage-inflated** by the fusion tuning. One overlap we cannot measure away: L2's training data contains, by exact text, all 119 `jackhhao/jailbreak-classification` attacks, 70 of the 100 JailbreakBench ones and 11 of the 247 jayavibhav ones; the fusion is trained without the first two sources, and without the 119 jackhhao attacks in-sample F1 is 83.7%. On attacks with *no* near-duplicate in the L3 index (the zero-day case), recall holds at **82%**; benchmark↔attack-DB overlap is ~1.9% (guarded by `tests/test_no_leakage.py`). Reproduce: `python scripts/eval_holdout.py`.
 
 **External evaluation** ([jayavibhav/prompt-injection](https://huggingface.co/datasets/jayavibhav/prompt-injection), 1K real-world samples):
 

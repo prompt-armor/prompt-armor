@@ -37,7 +37,7 @@ Security issues in the following areas are in scope:
 
 prompt-armor is a defense-in-depth layer, not a complete security solution:
 - Session tracking via inflammation cascade (opt-in, single engine instance)
-- ~50ms average latency (Apple M2 Pro; median ~16ms) adds a small overhead to each request
+- ~17ms average latency (Apple M4; median ~6ms; ~54ms on a 4-vCPU CI runner) adds a small overhead to each request
 - Council mode sends prompts to local LLM (ollama) — configure `privacy_mode: truncated` for API providers
 - L2 classifier requires a one-time model download (~270MB) for full accuracy; without it L2 runs a keyword fallback and logs a degraded-layer warning
 - Non-English: false positives and detection are measured for PT, ES, DE and FR against English in CI (`tests/benchmark/run_language_parity.py`); L2 was trained on 30 languages, but L1's rules cover only EN, DE, ES, FR and PT, and other languages are not measured

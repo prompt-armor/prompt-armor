@@ -72,4 +72,4 @@ The server exposes an `analyze_prompt` tool that returns the full analysis resul
 
 ## First run
 
-All five layers ship with the base install. The first `analyze()` downloads the L2 classifier (~270MB) plus the smaller L3 and L5 models from HuggingFace and loads the bundled L3 index — a one-time cost that depends on your connection. Every call after that is ~50ms warm on average (Apple M2 Pro; median ~16ms) and fully offline; that first-run download is the only network access prompt-armor makes.
+All five layers ship with the base install. The first `analyze()` downloads the L2 classifier (~270MB) plus the smaller L3 and L5 models from HuggingFace and loads the bundled L3 index — a one-time cost that depends on your connection. Every call after that is ~17ms warm on average (Apple M4; median ~6ms) and fully offline; that first-run download is the only network access prompt-armor makes.
