@@ -1,13 +1,18 @@
 """L2 — Sequence classifier layer.
 
-Uses ProtectAI's DeBERTa-v3 prompt injection classifier
-(``protectai/deberta-v3-base-prompt-injection-v2``, Apache-2.0) as ONNX with FP16
-weights that ONNX Runtime casts to FP32 at load, so scores match the upstream
-model on any CPU (dynamic INT8 did not: x86 and ARM disagreed). Hosted at
-``prompt-armor/l2-deberta-onnx``. Falls back to a
-keyword heuristic if the model cannot be loaded; that fallback is logged and
-reported via ``degraded``, because the fusion meta-classifier is trained on the
-real model's scores.
+Uses Horizon Labs' multilingual prompt injection classifier
+(``Horizon-Labs/prompt-injection-guard-small``, Apache-2.0, fine-tuned from
+mmBERT-small, MIT) as ONNX with INT8 embeddings and FP32 compute, so scores are
+the same on any CPU (only the embedding table is quantized; dynamic INT8 matmuls
+gave different answers on x86 and ARM in 0.9.2). Hosted at
+``prompt-armor/l2-injection-guard-onnx``. Falls back to a keyword heuristic if
+the model cannot be loaded; that fallback is logged and reported via
+``degraded``, because the fusion meta-classifier is trained on the real model's
+scores.
+
+Replaced Protect AI's English-only DeBERTa in 0.9.4: that model scored ordinary
+Portuguese as injection (0.95-1.00 on "Quero cancelar minha assinatura", 0.00 on
+the English translation), see CHANGELOG 0.9.4.
 
 Requires: onnxruntime, tokenizers
 """
@@ -26,12 +31,13 @@ from prompt_armor.models import Category, Evidence, LayerResult
 
 logger = logging.getLogger("prompt_armor")
 
-# Own directory, not the old data/models/classifier.onnx: v0.9.1 downloaded a
-# different model to that path, and pip upgrades leave downloaded files behind.
-# A fresh directory guarantees an upgraded install never pairs the old model
-# with the new calibration and fusion coefficients.
-_DEFAULT_MODEL_DIR = Path(__file__).parent.parent / "data" / "models" / "l2-deberta-onnx"
-_MODEL_FILE = "model_fp16.onnx"
+# One directory per model (0.9.1: classifier.onnx, 0.9.2-0.9.3: l2-deberta-onnx/):
+# pip upgrades leave downloaded files behind, and a fresh directory guarantees an
+# upgraded install never pairs an old model with the new fusion coefficients.
+_DEFAULT_MODEL_DIR = Path(__file__).parent.parent / "data" / "models" / "l2-injection-guard-onnx"
+_MODEL_FILE = "model_quantized.onnx"
+# Longer inputs are covered by the engine's 200-word windows (engine._segment_text).
+_MAX_TOKENS = 512
 _TOKENIZER_FILE = "tokenizer.json"
 
 # Heuristic classifier keywords (used when no ONNX model is available)
@@ -82,8 +88,8 @@ class L2ClassifierLayer(BaseLayer):
     name = "l2_classifier"
 
     # Pinned model revision for supply chain security
-    _MODEL_ID = "prompt-armor/l2-deberta-onnx"
-    _MODEL_REVISION = "e723caa5a7d3fe21cebed67761b67cc7e3744723"
+    _MODEL_ID = "prompt-armor/l2-injection-guard-onnx"
+    _MODEL_REVISION = "34e93600601e48c884dd743af1407fd3a35ce913"
 
     def __init__(self, config: ShieldConfig | None = None) -> None:
         self._config = config or ShieldConfig()
@@ -111,8 +117,7 @@ class L2ClassifierLayer(BaseLayer):
                 str(model_path), onnx_session_options(threads=2), providers=["CPUExecutionProvider"]
             )
             self._tokenizer = Tokenizer.from_file(str(tokenizer_path))
-            self._tokenizer.enable_padding(pad_id=0, pad_token="[PAD]")
-            self._tokenizer.enable_truncation(max_length=512)
+            self._tokenizer.enable_truncation(max_length=_MAX_TOKENS)
             self._use_heuristic = False
         except Exception as e:
             logger.warning("L2: failed to load classifier model (%s), using the keyword heuristic (degraded)", e)
@@ -135,7 +140,7 @@ class L2ClassifierLayer(BaseLayer):
         except ImportError:
             return None
 
-        logger.info("L2: downloading classifier model from %s (~400MB, one-time)...", cls._MODEL_ID)
+        logger.info("L2: downloading classifier model from %s (~270MB, one-time)...", cls._MODEL_ID)
         for local_dir in (model_dir, None):
             kwargs = {"revision": cls._MODEL_REVISION}
             try:
@@ -251,11 +256,9 @@ class L2ClassifierLayer(BaseLayer):
         # Raw probability of the INJECTION class (label 1)
         raw_prob = float(probs[1]) if len(probs) > 1 else float(probs[0])
 
-        # No range stretch: unlike the v0.9.1 model (which compressed its output
-        # to ~0.23 benign / ~0.78 attack), this model already spans 0-1 — on the
-        # 1,534-sample benchmark, benign median ~0.00 and attacks are bimodal
-        # (~0.00 or ~1.00). The fusion meta-classifier is retrained on these
-        # scores, so the raw probability is used as-is.
+        # No range stretch: the model's P(injection) already spans 0-1, and the
+        # fusion meta-classifier is retrained on these scores, so the raw
+        # probability is used as-is.
         calibrated = max(0.0, min(1.0, raw_prob))
 
         # Evidence threshold on calibrated score

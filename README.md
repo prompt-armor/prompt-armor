@@ -73,7 +73,7 @@ result.latency_ms   # 12.4
                  │    40+ weighted patterns        │
                  │                                 │
                  ├─── L2 Classifier    (<5ms)  ───┤
-                 │    DeBERTa-v3 ONNX              │
+                 │    multilingual mmBERT ONNX     │
 INPUT ── PRE ────┤                                 ├─── META-CLASSIFIER ─── GATE ─── OUTPUT
                  ├─── L3 Similarity    (<15ms) ───┤         ▲               │
                  │    contrastive FAISS (1.5K)     │         │               ├─ ALLOW
@@ -88,7 +88,7 @@ INPUT ── PRE ────┤                                 ├─── ME
 **Each layer catches what the others miss:**
 
 - **L1 Regex** — fast pattern matching with contextual modifiers. Catches "ignore previous instructions" and 40+ known patterns. Understands quotes and educational context.
-- **L2 Classifier** — Protect AI's DeBERTa-v3-base prompt injection model (Apache-2.0), ONNX via ONNX Runtime with the same results on x86 and ARM, hosted under the project's own Hugging Face org. Understands semantic intent — catches subtle and indirect attacks that regex can't see.
+- **L2 Classifier** — Horizon Labs' multilingual prompt injection model (`prompt-injection-guard-small`, mmBERT-small, Apache-2.0), trained on direct attacks and on instructions planted in documents and tool outputs, in 30 languages. ONNX via ONNX Runtime with the same results on x86 and ARM, hosted under the project's own Hugging Face org. Understands semantic intent — catches subtle and indirect attacks that regex can't see.
 - **L3 Similarity** — contrastive fine-tuned embeddings + exact FAISS cosine search against 1,509 curated known attacks (deduplicated from 25,160 raw entries). Matches by *intent*, not topic — so security discussions are far less likely to false-positive.
 - **L4 Structural** — analyzes structure, not content. Instruction-data boundary detection, manipulation stack (Cialdini's 6 principles), Shannon entropy, delimiter injection, encoding tricks.
 - **L5 Negative Selection** — learns what "normal" prompts look like via Isolation Forest trained on 5,000 benign prompts. Flags anomalous text patterns that don't match any known attack but deviate from normal.
@@ -245,22 +245,31 @@ We report **two numbers** — the harder internal benchmark and the same-distrib
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| **F1 Score** | **82.9%** | Canonical headline metric, as measured by the CI `Benchmark` workflow (Linux x86). Varies by CPU type (82.5% to 83.1%) because L3's embedding model is INT8; see [docs/benchmark.md](docs/benchmark.md) |
-| **Precision** | 89.5% | 51 false positives out of 969 benign |
-| **Recall** | 77.2% | 129 of 565 attacks pass, ~1 in 4 (model is precision-leaning) |
-| **Avg Latency** | ~50ms | Warm, Apple M4; median ~19ms. Inputs over 150 words are also scanned in overlapping windows, which pulls the average up. First call adds a one-time model download (~400MB) and load |
+| **F1 Score** | **86.7%** | Canonical headline metric, as measured by the CI `Benchmark` workflow (Linux x86). Can vary by a few tenths across CPU types because L3's embedding model is still INT8; see [docs/benchmark.md](docs/benchmark.md) |
+| **Precision** | 91.5% | 43 false positives out of 969 benign |
+| **Recall** | 82.3% | 100 of 565 attacks pass, ~1 in 6 |
+| **Avg Latency** | ~50ms | Warm, Apple M2 Pro, where 0.9.3 measures ~100ms; median ~16ms. Inputs over 150 words are also scanned in overlapping windows, which pulls the average up. First call adds a one-time model download (~270MB) and load |
 
-> **Honesty note — leakage audited, not asserted.** The shipped fusion thresholds/coefficients are tuned on this benchmark, so 82.9% is an *in-sample* number. We measured the honest out-of-sample counterpart with [`scripts/eval_holdout.py`](scripts/eval_holdout.py): a **cluster-aware 70/30 split** (no held-out attack shares a near-duplicate with train) with the decision **threshold selected on train only**, averaged over 10 splits → **84.2% ± 1.5%**, within about one standard deviation of the in-sample figure. So the benchmark is **not materially leakage-inflated** by the fusion tuning. One overlap we cannot measure away: L2 is Protect AI's model, trained on `jackhhao/jailbreak-classification`, which supplies 119 of the 565 benchmark attacks; without them, in-sample F1 is 79.2%. On attacks with *no* near-duplicate in the L3 index (the zero-day case), recall holds at **82%**; benchmark↔attack-DB overlap is ~1.9% (guarded by `tests/test_no_leakage.py`). Reproduce: `python scripts/eval_holdout.py`.
+> **Honesty note — leakage audited, not asserted.** The shipped fusion thresholds/coefficients are tuned on this benchmark, so 86.7% is an *in-sample* number. We measured the honest out-of-sample counterpart with [`scripts/eval_holdout.py`](scripts/eval_holdout.py): a **cluster-aware 70/30 split** (no held-out attack shares a near-duplicate with train) with the decision **threshold selected on train only**, averaged over 10 splits → **86.7% ± 1.5%**, the same as the in-sample figure. So the benchmark is **not materially leakage-inflated** by the fusion tuning. One overlap we cannot measure away: L2's training data contains, by exact text, all 119 `jackhhao/jailbreak-classification` attacks, 70 of the 100 JailbreakBench ones and 11 of the 247 jayavibhav ones; the fusion is trained without the first two sources, and without the 119 jackhhao attacks in-sample F1 is 83.7%. On attacks with *no* near-duplicate in the L3 index (the zero-day case), recall holds at **82%**; benchmark↔attack-DB overlap is ~1.9% (guarded by `tests/test_no_leakage.py`). Reproduce: `python scripts/eval_holdout.py`.
 
 **External evaluation** ([jayavibhav/prompt-injection](https://huggingface.co/datasets/jayavibhav/prompt-injection), 1K real-world samples):
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| **F1 Score** | **98.22%** | In-distribution: the internal benchmark and L3 training also draw from this dataset's train split, so treat as an upper bound, not generalization |
-| **Precision** | 98.1% | 6 false positives out of 692 benign |
-| **Recall** | 98.4% | 5 of 308 attacks pass |
+| **F1 Score** | **95.08%** | In-distribution: the internal benchmark and L3 training also draw from this dataset's train split, so treat as an upper bound, not generalization. Lower than 0.9.3's 98.22%: the English-only L2 that 0.9.4 replaced fit this dataset better |
+| **Precision** | 96.0% | 12 false positives out of 692 benign |
+| **Recall** | 94.2% | 18 of 308 attacks pass |
 
-Attack DB v2: 1,509 high-specificity curated entries (from 25,160 raw). L3 contrastive fine-tuned with 2,368 mined hard negatives — attacks and benigns now embed in opposite directions (cross-similarity -0.063). 5 layers + optional Council (LLM judge). Multilingual detection covers EN, DE, ES, FR, PT. Dataset is public in `tests/benchmark/dataset/`.
+Attack DB v2: 1,509 high-specificity curated entries (from 25,160 raw). L3 contrastive fine-tuned with 2,368 mined hard negatives — attacks and benigns now embed in opposite directions (cross-similarity -0.063). 5 layers + optional Council (LLM judge). Dataset is public in `tests/benchmark/dataset/`.
+
+**Languages** ([`tests/benchmark/run_language_parity.py`](tests/benchmark/run_language_parity.py), run by CI on every pull request; 864 texts):
+
+| | EN | PT | ES | DE | FR |
+|--|--|--|--|--|--|
+| Benign texts blocked | 7.2% | 5.3% | 3.0% | 4.0% | 4.0% |
+| Attacks blocked | 84.3% | 95.7% | 92.5% | 92.5% | 95.0% |
+
+CI fails if another language's benign texts are blocked more than 5 points above English, or its attacks more than 10 points below. Up to 0.9.3 the L2 model was English-only and blocked ordinary Portuguese (30.9% of benign Portuguese texts on this set, 7.9% in English); see [CHANGELOG 0.9.4](CHANGELOG.md). L2 was trained on 30 languages; L1's rules cover EN, DE, ES, FR and PT; other languages are not measured.
 
 ---
 
@@ -393,7 +402,7 @@ prompt-armor/
 │   ├── models.py            # ShieldResult, Evidence, Decision
 │   ├── layers/
 │   │   ├── l1_regex.py      # Pattern matching (40+ rules)
-│   │   ├── l2_classifier.py # DeBERTa-v3 ONNX classifier
+│   │   ├── l2_classifier.py # multilingual mmBERT ONNX classifier
 │   │   ├── l3_similarity.py # Contrastive embeddings + FAISS IVF
 │   │   ├── l4_structural.py # Boundary, entropy, manipulation
 │   │   └── l5_negative_selection.py # Anomaly detection (IsolationForest)

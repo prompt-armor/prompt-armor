@@ -64,8 +64,8 @@ In your OpenClaw settings:
 
 ## Performance
 
-- Latency: ~50ms per scan (warm average; median ~19ms)
-- F1 Score: 82.9% internal (1,534-sample) / 98.22% external (jayavibhav)
+- Latency: ~50ms per scan (warm average on Apple M2 Pro; median ~16ms)
+- F1 Score: 86.7% internal (1,534-sample) / 95.08% external (jayavibhav)
 - Runs fully offline — no API calls during analysis
 - Fail-open: if `prompt-armor` is not installed, messages pass through
 

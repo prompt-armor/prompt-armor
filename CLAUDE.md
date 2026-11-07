@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-prompt-armor is an open-core LLM prompt security analysis tool. It detects prompt injections, jailbreaks, and other attacks against LLMs. The Lite engine runs 5 analysis layers in parallel, fuses scores via a trained meta-classifier, and returns decisions in ~50ms (warm average; median ~19ms) offline. **Canonical metrics: F1 82.9% internal (1,534-sample) / 98.22% external (jayavibhav 1K, same-distribution).** When citing metrics anywhere (README, docs, integrations), use exactly these two numbers — `tests/test_metrics_consistency.py` enforces it.
+prompt-armor is an open-core LLM prompt security analysis tool. It detects prompt injections, jailbreaks, and other attacks against LLMs. The Lite engine runs 5 analysis layers in parallel, fuses scores via a trained meta-classifier, and returns decisions in ~50ms (warm average on Apple M2 Pro; median ~16ms) offline. **Canonical metrics: F1 86.7% internal (1,534-sample) / 95.08% external (jayavibhav 1K, same-distribution).** When citing metrics anywhere (README, docs, integrations), use exactly these two numbers — `tests/test_metrics_consistency.py` enforces it.
 
 ## Commands
 
@@ -61,7 +61,7 @@ The core pipeline runs 5 analysis layers **in parallel** via `ThreadPoolExecutor
 
 - **`engine.py` (LiteEngine)** — Orchestrates: Unicode normalization, sliding window segmentation, parallel layer dispatch, per-layer timeout (2s) with fail-open. **Inflammation cascade**: per-session threat awareness (keyed by `session_id`, stateless by default) with exponential decay.
 - **`layers/l1_regex.py`** — 40+ English + 20 multilingual (DE/ES/FR/PT) weighted regex rules. Context modifier exploit hardened (high scores not dampened).
-- **`layers/l2_classifier.py`** — Protect AI's DeBERTa-v3-base prompt injection classifier (184M params, Apache-2.0), ONNX with FP16 weights cast to FP32 at load (INT8 gave different answers on x86 and ARM). Auto-downloads from `prompt-armor/l2-deberta-onnx` (our own HF copy, pinned) on first use. Falls back to a keyword heuristic, reported via `degraded` / `LiteEngine.degraded_layers`.
+- **`layers/l2_classifier.py`** — Horizon Labs' multilingual prompt injection classifier (`prompt-injection-guard-small`, mmBERT-small, 141M params, Apache-2.0), ONNX with INT8 embeddings and FP32 compute (dynamic INT8 matmuls gave different answers on x86 and ARM). Auto-downloads from `prompt-armor/l2-injection-guard-onnx` (our own HF copy, pinned) on first use. Falls back to a keyword heuristic, reported via `degraded` / `LiteEngine.degraded_layers`. Replaced Protect AI's English-only DeBERTa in 0.9.4, which scored ordinary Portuguese as injection; `tests/benchmark/run_language_parity.py` guards it.
 - **`layers/l3_similarity.py`** — **Contrastive fine-tuned** MiniLM-L12-v2 + exact FAISS cosine search against 1,509 curated attacks (v2 DB, deduplicated from 25,160 raw). Intent-based matching (not topic-based).
 - **`layers/l4_structural.py`** — Instruction-data boundary detection, manipulation stack (Cialdini's 6 principles), Shannon entropy, delimiter injection, encoding tricks, role assignment.
 - **`layers/l5_negative_selection.py`** — Isolation Forest anomaly detection trained on 5K benign prompts. Catches zero-day attacks via deviation from normal text patterns.
@@ -79,13 +79,16 @@ The core pipeline runs 5 analysis layers **in parallel** via `ThreadPoolExecutor
 - **CLI exit codes** — 0=allow, 1=warn, 2=block, 3=error
 - **MCP server is Python** — Uses `mcp` SDK (FastMCP)
 - **Meta-classifier coefficients are hardcoded in fusion.py** — retrain via `scripts/train_fusion.py` if layers or dataset change
-- **L2 model auto-downloads** — from `prompt-armor/l2-deberta-onnx` on first use (~400MB). Never point L2 at a third-party repo again: 0.9.1's source was withdrawn and every fresh install silently degraded. Rebuild/re-upload with `scripts/export_l2_model.py`
+- **L2 model auto-downloads** — from `prompt-armor/l2-injection-guard-onnx` on first use (~270MB). Never point L2 at a third-party repo again: 0.9.1's source was withdrawn and every fresh install silently degraded. Rebuild/re-upload with `scripts/export_l2_model.py`
+- **Fusion trains without L2's training data** — `train_fusion.py` leaves out benchmark sources the L2 model saw (`L2_TRAINING_OVERLAP`); training on them makes the fusion over-trust L2 on memorized text
+- **Non-English is a first-class case** — any change to a model layer must keep `tests/benchmark/run_language_parity.py` passing (PT/ES/DE/FR false positives and detection within a few points of English)
 
 ### Data files
 
 - `data/rules/default_rules.yml` — L1 regex rules (EN + DE/ES/FR/PT)
 - `data/attacks/known_attacks.jsonl` — L3 attack DB (25,160 entries)
-- `data/models/` — L2 ONNX model in `l2-deberta-onnx/` (auto-downloaded) + L3 contrastive model (trained locally, not in git)
+- `data/models/` — L2 ONNX model in `l2-injection-guard-onnx/` (auto-downloaded) + L3 contrastive model (trained locally, not in git)
+- `tests/benchmark/dataset/language_parity.jsonl` — parallel EN/PT/ES/DE/FR benign and attack texts for the language parity check (sources in `LANGUAGE_PARITY.md`)
 
 ## Git Workflow (MANDATORY)
 

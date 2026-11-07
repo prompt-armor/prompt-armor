@@ -7,9 +7,16 @@ optimal weights for combining the 4 analysis layers.
 The trained model is a single dot product + sigmoid — zero latency,
 zero dependencies at runtime. Just export the coefficients.
 
+Trains only on samples the L2 model has not seen: benchmark attacks whose source
+dataset is in L2's training data are left out (L2_TRAINING_OVERLAP), so the
+fusion does not learn to trust L2 on memorized text. Measured for 0.9.4: training
+on everything raised in-sample F1 to 89.4%, but with 75 false positives instead
+of 43 and a lower F1 on the attacks L2 had not seen (88.5% vs 89.8%).
+
 Usage:
     python scripts/train_fusion.py
     python scripts/train_fusion.py --scores scripts/layer_scores.json
+    python scripts/train_fusion.py --include-overlap   # train on every sample
 """
 
 from __future__ import annotations
@@ -28,6 +35,13 @@ from sklearn.metrics import (
 from sklearn.model_selection import StratifiedKFold
 
 DEFAULT_SCORES = Path(__file__).parent / "layer_scores.json"
+
+# Benchmark sources the L2 model (Horizon-Labs/prompt-injection-guard-small) saw in
+# training, by exact text match against its listed datasets: all 119
+# jailbreak-classification attacks (TrustAIRLab in-the-wild jailbreaks) and 70 of
+# the 100 JailbreakBench ones (neuralchemy/Prompt-injection-dataset). 11 of 247
+# jayavibhav-train attacks also match; too few to drop the source.
+L2_TRAINING_OVERLAP = ("jailbreak-classification", "jailbreakbench")
 
 FEATURE_NAMES = [
     "l1_regex",
@@ -72,12 +86,19 @@ def _fit(x_train: np.ndarray, y_train: np.ndarray, allow_negative: bool) -> tupl
         active.remove(worst)
 
 
-def train_fusion(scores_path: Path, holdout_ratio: float = 0.3, allow_negative: bool = False) -> None:
+def train_fusion(
+    scores_path: Path, holdout_ratio: float = 0.3, allow_negative: bool = False, include_overlap: bool = False
+) -> None:
     # Load data
     with open(scores_path) as f:
         samples = json.load(f)
 
     print(f"Loaded {len(samples)} samples")
+    if not include_overlap:
+        if any("source" not in s for s in samples):
+            raise SystemExit("Scores have no 'source' field: re-run scripts/dump_layer_scores.py")
+        samples = [s for s in samples if s["source"] not in L2_TRAINING_OVERLAP]
+        print(f"Training on {len(samples)} samples outside L2's training data (excluded {L2_TRAINING_OVERLAP})")
 
     # Build feature matrix
     raw_features = []
@@ -272,5 +293,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--allow-negative", action="store_true", help="Keep negative coefficients (fusion.py does not accept them)"
     )
+    parser.add_argument(
+        "--include-overlap", action="store_true", help="Also train on the attacks L2 saw in training (inflates F1)"
+    )
     args = parser.parse_args()
-    train_fusion(args.scores, allow_negative=args.allow_negative)
+    train_fusion(args.scores, allow_negative=args.allow_negative, include_overlap=args.include_overlap)

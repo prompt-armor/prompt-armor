@@ -6,9 +6,9 @@
 
 - **5 parallel analysis layers** — regex, ML classifier, contrastive semantic similarity, structural analysis, anomaly detection
 - **Trained meta-classifier fusion** — learned optimal layer combination from benchmark data
-- **~50ms average latency (warm; median ~19ms)** — fast enough for real-time API integration
+- **~50ms average latency (warm, Apple M2 Pro; median ~16ms)** — fast enough for real-time API integration
 - **Fully offline** — no API keys, no LLM dependency, no network calls during analysis
-- **Multilingual** — EN, DE, ES, FR, PT regex rules + multilingual embeddings
+- **Multilingual** — multilingual L2 classifier and embeddings, EN, DE, ES, FR, PT regex rules; false positives and detection in PT, ES, DE and FR checked against English in CI
 - **Session awareness** — per-session inflammation cascade (keyed by `session_id`) catches iterative probing attacks
 - **Council mode** — optional LLM judge (ollama) for uncertain cases
 - **MCP Server** — native integration with Claude Desktop and other MCP clients
@@ -34,8 +34,8 @@ print(result.decision)  # Decision.BLOCK
 
 We report **two numbers** — the harder internal benchmark and the same-distribution external one.
 
-**Internal (1,534 samples, harder):** F1 **82.9%** | Precision 89.5% | Recall 77.2% | Latency ~50ms (warm)
+**Internal (1,534 samples, harder):** F1 **86.7%** | Precision 91.5% | Recall 82.3% | Latency ~50ms (warm)
 
-**External (jayavibhav/prompt-injection 1K):** F1 **98.22%** | Precision 98.1% | Recall 98.4% — in-distribution (shares jayavibhav's train split), treat as an upper bound, not generalization
+**External (jayavibhav/prompt-injection 1K):** F1 **95.08%** | Precision 96.0% | Recall 94.2% — in-distribution (shares jayavibhav's train split), treat as an upper bound, not generalization
 
 Attack DB v2: 1,509 high-specificity entries. L3 contrastive fine-tuned with 2.4K hard negatives.
