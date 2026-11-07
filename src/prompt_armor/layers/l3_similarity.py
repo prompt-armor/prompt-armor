@@ -43,11 +43,17 @@ _ONNX_MODEL_PATH = Path(__file__).parent.parent / "data" / "models" / "l3-contra
 _CONTRASTIVE_MODEL_PATH = Path(__file__).parent.parent / "data" / "models" / "l3-contrastive"
 _DEFAULT_MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
 
+# FP16 weights cast to FP32 at load, like L2: up to v0.9.3 this was a dynamic
+# INT8 graph (model_quant.onnx), whose scores varied with the CPU's instruction
+# set (benchmark F1 82.5%-83.1% for the same code). A new file name also keeps an
+# upgraded install from pairing a leftover INT8 file with the new index and fusion.
+_ONNX_MODEL_FILE = "model_fp16.onnx"
+
 # Pinned revision for supply-chain security (mirrors L2's revision pin). The L3
 # ONNX graph is data (not code-bearing like the L5 pickle), so revision pinning
 # is the proportionate control: an attacker cannot swap the artifact served
 # under a fixed commit hash.
-_ONNX_MODEL_REVISION = "e634d5b16c26d71c7b841ef56c13c18a7dd5f49d"
+_ONNX_MODEL_REVISION = "de1b33ece33d7a6a31518cc07efd11722b29248c"
 
 # Similarity thresholds
 _HIGH_SIMILARITY = 0.75
@@ -160,7 +166,7 @@ class L3SimilarityLayer(BaseLayer):
             logger.info("L3: downloading ONNX model from prompt-armor/l3-contrastive-onnx...")
             hf_hub_download(
                 repo_id="prompt-armor/l3-contrastive-onnx",
-                filename="model_quant.onnx",
+                filename=_ONNX_MODEL_FILE,
                 revision=_ONNX_MODEL_REVISION,
                 local_dir=str(_ONNX_MODEL_PATH),
             )
@@ -204,7 +210,7 @@ class L3SimilarityLayer(BaseLayer):
         os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
         # Try ONNX first (no torch/sentence-transformers needed)
-        onnx_model = _ONNX_MODEL_PATH / "model_quant.onnx"
+        onnx_model = _ONNX_MODEL_PATH / _ONNX_MODEL_FILE
         onnx_tokenizer = _ONNX_MODEL_PATH / "tokenizer.json"
 
         # Auto-download from HuggingFace if not present

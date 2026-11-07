@@ -4,6 +4,22 @@ All notable changes to prompt-armor will be documented in this file.
 
 ## [Unreleased]
 
+## [0.9.5] - 2026-11-06
+
+Fix release: benchmark results no longer depend on the CPU. L3's embedding model computed in dynamic INT8, which rounds differently per instruction set, so the same code scored differently on different machines (82.5% to 83.1% in 0.9.3, 86.6% to 86.8% in 0.9.4). L3 now computes in FP32, like L2, and every machine tested gives the same result. No API changes.
+
+### Fixed
+- **L3 computes in FP32.** The embedding model ships as FP16 weights behind `Cast`-to-FP32 nodes (`model_fp16.onnx`, at [`prompt-armor/l3-contrastive-onnx@de1b33e`](https://huggingface.co/prompt-armor/l3-contrastive-onnx/commit/de1b33ece33d7a6a31518cc07efd11722b29248c)) instead of a dynamic INT8 graph. For the same text, x86 and ARM embeddings now agree within 3e-7 (INT8: up to 0.054 apart, cosine as low as 0.938). Three CI runs on different runners, Apple M2 Pro and Apple M4 all score the benchmark identically: F1 86.46%, 43 FP, 102 FN.
+  - It is the same v0.8.0 model. Its FP32 training checkpoint was not kept (the local copy had been overwritten by an unpublished retrain), so the weights were dequantized from the published INT8 graph (`e634d5b`) and exported again: mean cosine 0.9998 (minimum 0.998) to the INT8 embeddings over the benchmark and the attack DB. `scripts/export_l3_onnx.py --from-int8 <revision>` rebuilds it byte for byte; the plain export of a SentenceTransformer checkpoint now also writes FP16 weights (the INT8 option is gone) and works with transformers 5.
+  - New file name, so an upgraded install never pairs a leftover INT8 file with the new index and fusion. The L3 download grows from 118MB to 224MB.
+  - The bundled FAISS index is rebuilt for the new revision.
+
+### Changed
+- **Fusion retrained** on the FP32 L3 scores with 0.9.4's procedure (scores dumped on an idle machine, zero layer timeouts). `l5_negative_selection` now comes out negative and is pinned to 0.
+- **Numbers re-measured.** In-sample F1 86.5% on any CPU (0.9.4 published 86.6%, the lower of CI runs between 86.6% and 86.8%); out-of-sample 86.7% ± 1.6%; external 95.08% (unchanged); 83.6% without the 119 jackhhao attacks. Language parity, benign text blocked: EN 5.3%, PT 3.3%, ES 1.0%, DE 2.0%, FR 2.0% (0.9.4: 7.2%, 5.3%, 3.0%, 4.0%, 4.0%); attacks blocked: EN 81.4% and FR 90.0% (0.9.4: 84.3% and 95.0%), the other languages unchanged. The attack changes come from L3 itself (0.9.4's fusion with the FP32 L3 blocks the same attacks), the benign ones from the retrained fusion.
+- **Latency unchanged.** Alternating runs against 0.9.4 on Apple M4 give the same engine average and median, and the same L3 time (~9ms average); the published ~17ms / ~6ms stand.
+- The `Benchmark` workflow logs the runner's CPU model.
+
 ## [0.9.4] - 2026-11-06
 
 Fix release: the L2 classifier that 0.9.2 introduced is English-only, and it scored ordinary Portuguese, Spanish, German and French as prompt injection, so benign non-English text was blocked several times more often than the same text in English. L2 now runs a multilingual model built for documents and tool outputs, the fusion is retrained without the attacks that model saw in training, CI checks false positives and detection per language, and the per-layer timeout no longer skips layers when one engine serves concurrent callers. No API changes.

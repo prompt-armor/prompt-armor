@@ -30,18 +30,18 @@ Dataset: 969 benign + 565 malicious (1,534 total) from deepset/prompt-injections
 
 | Metric | Value |
 |--------|-------|
-| Accuracy | 90.6% |
+| Accuracy | 90.5% |
 | Precision | 91.5% |
-| Recall | 82.1% |
-| F1 Score | **86.6%** |
+| Recall | 81.9% |
+| F1 Score | **86.5%** |
 | Avg Latency | ~17ms (warm, quiet Apple M4; median ~6ms; 0.9.3 on the same machine: ~31ms / ~13ms). CI runner (4 vCPU): ~54ms, 0.9.3 ~112ms |
-| FP / FN | 43 / 101 |
+| FP / FN | 43 / 102 |
 
-Measured by the CI `Benchmark` workflow (Linux x86, GitHub-hosted runner), which re-runs it on every push to `main`. L2 now computes in FP32 (only its embedding table is INT8) and gives the same scores on x86 and ARM (600 of 600 decisions identical in a cross-architecture check); L3's embedding model is still dynamic INT8, so the figure still moves by a tenth or two across CPU types: GitHub's runners scored 86.8% (99 FN) and 86.6% (101 FN) in two runs of the same code, Apple M2 Pro 86.7% (100 FN), Apple M4 86.6% (101 FN). The headline is the lower CI result. The out-of-sample, external, per-source and language figures on this page were measured on Apple M2 Pro.
+Measured by the CI `Benchmark` workflow (Linux x86, GitHub-hosted runner), which re-runs it on every push to `main`. The result does not depend on the CPU: L2 computes in FP32 (only its embedding table is stored as INT8) and, since 0.9.5, so does L3 (FP16 weights cast to FP32 at load). Three CI runs of the same code on different runners, Apple M2 Pro and Apple M4 all scored 86.46% (43 FP, 102 FN). Up to 0.9.4, L3's embedding model was dynamic INT8, which rounds differently per instruction set and moved the figure by up to six tenths across machines. The out-of-sample, external, per-source and language figures on this page were measured on Apple M2 Pro.
 
-Recall by source (Apple M2 Pro, 0.9.3 → 0.9.4): jayavibhav 97.6% → 94.7%, jailbreak-classification 95.0% → 95.0%, deepset test 62.7% → 72.9%, JailbreakBench 6% → 35%, hand-crafted (encoding, compound, indirect, multilingual) 100% → 100%.
+Recall by source (Apple M2 Pro, 0.9.3 → 0.9.5): jayavibhav 97.6% → 94.3%, jailbreak-classification 95.0% → 94.1%, deepset test 62.7% → 72.9%, JailbreakBench 6% → 35%, hand-crafted (encoding, compound, indirect, multilingual) 100% → 100%.
 
-> **How to read these two numbers.** The **internal 86.6%** is the harder, canonical figure — but it is *in-sample*: fusion thresholds/coefficients are tuned on this benchmark, and L3's benign discrimination is trained on this set's benigns. The **external 95.08%** is *in-distribution*, not generalization: the internal benchmark and L3 training draw from jayavibhav's train split, so it should be read as an upper bound. Benchmark↔attack-DB overlap is low (~1.9%, guarded by `tests/test_no_leakage.py`). The held-out counterpart is measured (see **Out-of-sample validation** below): a cluster-aware split with the threshold picked on train only scores **86.7% ± 1.5%**, within a tenth of in-sample. L2 adds a training-data overlap of its own, found by exact text match against the datasets its authors list: all 119 `jackhhao/jailbreak-classification` attacks, 70 of the 100 JailbreakBench ones and 11 of the 247 jayavibhav ones. The fusion is trained without the first two sources (`train_fusion.py`, `L2_TRAINING_OVERLAP`); training on them too would score 89.4% in-sample, but with 75 false positives instead of 43 and a lower F1 on the attacks L2 had not seen (88.5% vs 89.8%). Excluding the 119 jackhhao attacks, in-sample F1 is **83.7%** on Apple M2 Pro (0.9.3 on the same subset and machine: 78.8%). Most of the 100 FN are JailbreakBench harmful-behavior requests, which the L2 model deliberately labels safe when they carry no override attempt. Decisions are deterministic (no threshold jitter) and the benchmark is **single-shot** — an earlier internal 86.9% was inflated by per-session inflammation accumulating across the benchmark run (now isolated per session, so it no longer leaks across prompts or tenants).
+> **How to read these two numbers.** The **internal 86.5%** is the harder, canonical figure — but it is *in-sample*: fusion thresholds/coefficients are tuned on this benchmark, and L3's benign discrimination is trained on this set's benigns. The **external 95.08%** is *in-distribution*, not generalization: the internal benchmark and L3 training draw from jayavibhav's train split, so it should be read as an upper bound. Benchmark↔attack-DB overlap is low (~1.9%, guarded by `tests/test_no_leakage.py`). The held-out counterpart is measured (see **Out-of-sample validation** below): a cluster-aware split with the threshold picked on train only scores **86.7% ± 1.6%**, within two tenths of in-sample. L2 adds a training-data overlap of its own, found by exact text match against the datasets its authors list: all 119 `jackhhao/jailbreak-classification` attacks, 70 of the 100 JailbreakBench ones and 11 of the 247 jayavibhav ones. The fusion is trained without the first two sources (`train_fusion.py`, `L2_TRAINING_OVERLAP`); when measured for 0.9.4, training on them too scored 89.4% in-sample, but with 75 false positives instead of 43 and a lower F1 on the attacks L2 had not seen (88.5% vs 89.8%). Excluding the 119 jackhhao attacks, in-sample F1 is **83.6%** on Apple M2 Pro (0.9.3 on the same subset and machine: 78.8%). Most of the 102 FN are JailbreakBench harmful-behavior requests, which the L2 model deliberately labels safe when they carry no override attempt. Decisions are deterministic (no threshold jitter) and the benchmark is **single-shot** — an earlier internal 86.9% was inflated by per-session inflammation accumulating across the benchmark run (now isolated per session, so it no longer leaks across prompts or tenants).
 
 ### Languages
 
@@ -50,15 +50,15 @@ Recall by source (Apple M2 Pro, 0.9.3 → 0.9.4): jayavibhav 97.6% → 94.7%, ja
 | Apple M2 Pro | EN | PT | ES | DE | FR |
 |--|--|--|--|--|--|
 | Benign blocked, 0.9.3 | 7.9% | **30.9%** | 20.0% | 13.0% | 11.0% |
-| Benign blocked, 0.9.4 | 7.2% | **5.3%** | 3.0% | 4.0% | 4.0% |
+| Benign blocked, 0.9.5 | 5.3% | **3.3%** | 1.0% | 2.0% | 2.0% |
 | Attacks blocked, 0.9.3 | 81.4% | 95.7% | 92.5% | 92.5% | 95.0% |
-| Attacks blocked, 0.9.4 | 84.3% | 95.7% | 92.5% | 92.5% | 95.0% |
+| Attacks blocked, 0.9.5 | 81.4% | 95.7% | 92.5% | 92.5% | 90.0% |
 
 0.9.3 fails the check; its English-only L2 scored ordinary Portuguese as injection. The English-Portuguese part was written while choosing 0.9.4's L2, so it is a regression guard rather than an independent measurement; MASSIVE and the public injections are third-party.
 
 ### Out-of-sample validation (leakage audit)
 
-The internal 86.6% is *in-sample*: the shipped fusion coefficients and decision threshold are tuned on this benchmark. To check whether that inflates the number, [`scripts/eval_holdout.py`](../scripts/eval_holdout.py) measures the honest out-of-sample counterpart:
+The internal 86.5% is *in-sample*: the shipped fusion coefficients and decision threshold are tuned on this benchmark. To check whether that inflates the number, [`scripts/eval_holdout.py`](../scripts/eval_holdout.py) measures the honest out-of-sample counterpart:
 
 - **Cluster-aware split** — benchmark samples are grouped into near-duplicate clusters (token-Jaccard ≥ 0.85, union-find) and split by *whole cluster* into 70% train / 30% holdout, so no held-out sample has a near-twin in train.
 - **Threshold on train only** — the fusion logistic-regression is retrained on the train split and the decision threshold is chosen by out-of-fold cross-validation on train, *never* on the holdout (which `train_fusion.py` does — a subtle leak this avoids).
@@ -67,16 +67,16 @@ The internal 86.6% is *in-sample*: the shipped fusion coefficients and decision 
 
 | Metric (held-out, 10 splits) | Value |
 |--------|-------|
-| **F1** | **86.7% ± 1.5%** |
-| Precision | 92.9% ± 2.6% |
-| Recall | 81.4% ± 1.7% |
-| F1 without the sources in L2's training data | 90.7% ± 2.0% |
-| Recall on **out-of-DB** attacks (zero-day) | 81.0% ± 1.8% |
+| **F1** | **86.7% ± 1.6%** |
+| Precision | 92.1% ± 2.5% |
+| Recall | 82.1% ± 2.6% |
+| F1 without the sources in L2's training data | 90.1% ± 1.9% |
+| Recall on **out-of-DB** attacks (zero-day) | 81.7% ± 2.7% |
 | Recall on **in-DB** attacks (11 samples, memorizable) | 100% |
 
-The out-of-sample result **matches the in-sample 86.6% within a tenth** — the benchmark is **not materially inflated by the fusion tuning**.
+The out-of-sample result **is within two tenths of the in-sample 86.5%** — the benchmark is **not materially inflated by the fusion tuning**.
 
-**One caveat this cannot remove without an L3 retrain:** the L3 contrastive model was trained with the benchmark benigns as negatives (a precision-side leak). The **out-of-DB recall (81%)** is the cleanest zero-day proxy available without that retrain; a fully clean number is tracked as a heavier follow-up.
+**One caveat this cannot remove without an L3 retrain:** the L3 contrastive model was trained with the benchmark benigns as negatives (a precision-side leak). The **out-of-DB recall (82%)** is the cleanest zero-day proxy available without that retrain; a fully clean number is tracked as a heavier follow-up.
 
 Reproduce: `python scripts/eval_holdout.py` (runs the current engine over the benchmark, then the split → retrain → eval loop; first run caches layer scores).
 
@@ -93,8 +93,11 @@ The benchmark includes attacks in English, German, Spanish, French, and Portugue
 If you change layers or datasets:
 
 ```bash
-# Retrain L3 contrastive embeddings (~70min on CPU)
+# Retrain L3 contrastive embeddings (~70min on CPU), export them to ONNX
+# (FP16 weights, FP32 compute), upload, pin the revision, rebuild the bundled index
 python scripts/train_l3_contrastive.py
+python scripts/export_l3_onnx.py
+python scripts/build_l3_index.py
 
 # Retrain L5 anomaly model (~1min)
 python scripts/train_l5_model.py
