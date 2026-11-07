@@ -4,6 +4,8 @@ All notable changes to prompt-armor will be documented in this file.
 
 ## [Unreleased]
 
+## [0.9.4] - 2026-11-06
+
 Fix release: the L2 classifier that 0.9.2 introduced is English-only, and it scored ordinary Portuguese, Spanish, German and French as prompt injection, so benign non-English text was blocked several times more often than the same text in English. L2 now runs a multilingual model built for documents and tool outputs, the fusion is retrained without the attacks that model saw in training, CI checks false positives and detection per language, and the per-layer timeout no longer skips layers when one engine serves concurrent callers. No API changes.
 
 ### What happened
