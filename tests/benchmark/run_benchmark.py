@@ -50,6 +50,7 @@ class BenchmarkMetrics:
     total_time_s: float = 0.0
     active_layers: list[str] = field(default_factory=list)
     degraded_layers: list[str] = field(default_factory=list)
+    skipped_layers: dict[str, int] = field(default_factory=dict)
     errors: list[str] = field(default_factory=list)
 
 
@@ -159,6 +160,7 @@ def run_benchmark(
         except Exception as e:
             metrics.errors.append(f"Malicious: {str(e)[:100]}")
 
+    metrics.skipped_layers = engine.skipped_layers
     engine.close()
     metrics.total_time_s = round(time.perf_counter() - start_time, 2)
 
@@ -212,6 +214,15 @@ def run_benchmark(
             json.dump(asdict(metrics), f, indent=2)
         print(f"\nResults saved to {output_path}")
 
+    # A layer skipped fail-open (timeout on a loaded machine) silently changes the
+    # result: while measuring 0.9.5, a busy laptop skipped L2 repeatedly and the run
+    # still printed an F1. The numbers above are not the shipped engine's; refuse them
+    # like a degraded layer.
+    if metrics.skipped_layers and not allow_degraded:
+        print(f"\nError: layer runs skipped during the benchmark: {metrics.skipped_layers}.")
+        print("The machine is too loaded for the per-layer timeout; re-run on an idle one.")
+        sys.exit(1)
+
     return metrics
 
 
@@ -222,7 +233,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="prompt-armor benchmark")
     parser.add_argument("--dataset", type=Path, default=DATASET_DIR, help="Dataset directory")
     parser.add_argument("--output", type=Path, help="Output JSON file")
-    parser.add_argument("--allow-degraded", action="store_true", help="Run even if a layer is missing or on a fallback")
+    parser.add_argument(
+        "--allow-degraded", action="store_true", help="Run even if a layer is missing, on a fallback or skipped"
+    )
     parser.add_argument("--min-f1", type=float, help="Exit non-zero if F1 falls below this value (e.g. 0.82)")
     args = parser.parse_args()
 

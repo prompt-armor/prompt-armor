@@ -4,6 +4,12 @@ All notable changes to prompt-armor will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- `LiteEngine.skipped_layers`: layer runs skipped fail-open at analyze time (timed out, still queued or crashed), by layer name.
+
+### Changed
+- The benchmark (`tests/benchmark/run_benchmark.py`) and the fusion training dump (`scripts/dump_layer_scores.py`) refuse a run in which any layer was skipped, as they already did for a degraded layer. While measuring 0.9.5 on a loaded laptop, L2 timed out repeatedly; the benchmark still printed an F1 and the dump recorded the skipped layer as 0.0 in the fusion's training data, with no error. `--allow-degraded` still runs the benchmark anyway.
+
 ## [0.9.5] - 2026-11-06
 
 Fix release: benchmark results no longer depend on the CPU. L3's embedding model computed in dynamic INT8, which rounds differently per instruction set, so the same code scored differently on different machines (82.5% to 83.1% in 0.9.3, 86.6% to 86.8% in 0.9.4). L3 now computes in FP32, like L2, and every machine tested gives the same result. No API changes.
