@@ -47,10 +47,10 @@ _LIVE_FILES = [
 _HEADLINE_F1 = {"86.6", "95.08"}
 # Disclosed next to the headline in docs/benchmark.md and README.md, about the
 # attacks the L2 model saw in training: 83.7 is the in-sample F1 without the 119
-# jailbreak-classification attacks (79.2 for 0.9.3 on the same subset); 89.4 is what
+# jailbreak-classification attacks (78.8 for 0.9.3 on the same subset); 89.4 is what
 # training the fusion on them would score, 89.8 / 88.5 the F1 on the attacks L2 had
 # not seen without and with that, and 90.7 the held-out F1 without them.
-_CANONICAL_F1 = _HEADLINE_F1 | {"86.7", "86.8", "83.7", "79.2", "89.4", "89.8", "88.5", "90.7"}
+_CANONICAL_F1 = _HEADLINE_F1 | {"86.7", "86.8", "83.7", "78.8", "89.4", "89.8", "88.5", "90.7"}
 
 # Stale headline latencies that the reconciliation removed. (Competitor latencies
 # like ~50ms / ~100ms in the comparison table are fine — hence a denylist, not an

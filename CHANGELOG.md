@@ -39,7 +39,7 @@ These replace the 0.9.2–0.9.3 figures everywhere (`tests/test_metrics_consiste
 | Internal F1, in-sample (1,534 samples, CI) | 82.9% (P 89.5%, R 77.2%) | **86.6%** (P 91.5%, R 82.1%) |
 | False positives / missed attacks (CI) | 51 / 129 | **43 / 101** |
 | Out-of-sample F1 (10 cluster splits) | 84.2% ± 1.5% | **86.7% ± 1.5%** |
-| Without the 119 jailbreak-classification attacks | 79.2% | **83.7%** |
+| Without the 119 jailbreak-classification attacks (Apple M2 Pro) | 78.8% | **83.7%** |
 | External F1 (jayavibhav 1K) | 97.91% (98.22% on Apple M4) | **95.08%** |
 | Adversarial suite: attacks caught, benign flagged | 75/77, 4/26 | **77/77**, 6/26 |
 | Benign blocked, EN / PT / ES / DE / FR (language parity set) | 7.9 / 30.9 / 20.0 / 13.0 / 11.0% | **7.2 / 5.3 / 3.0 / 4.0 / 4.0%** |
