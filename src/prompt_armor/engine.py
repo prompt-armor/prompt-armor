@@ -13,7 +13,7 @@ import threading
 import time
 import unicodedata
 import weakref
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import Any
@@ -266,6 +266,12 @@ class LiteEngine:
         self._inflammation: OrderedDict[str, float] = OrderedDict()
         self._inflammation_lock = threading.Lock()  # thread-safe inflammation
         self._council: Any = None  # Lazy-initialized when council.enabled
+        # Layer runs skipped fail-open at analyze time (timeout, still queued,
+        # crash), by layer name. Serving keeps going, but a benchmark or a fusion
+        # training dump with a skipped layer measures a different detector, so
+        # those scripts check ``skipped_layers`` and refuse the run.
+        self._skipped: Counter[str] = Counter()
+        self._skipped_lock = threading.Lock()
 
         # Initialize layers with fail-open
         loaded: list[BaseLayer] = []
@@ -323,6 +329,7 @@ class LiteEngine:
                     layer_results.append(layer.analyze(text))
                 except Exception as e:
                     logger.warning("Layer %s failed: %s, skipping", layer.name, e)
+                    self._skip(layer.name)
         pending = []
         for layer in self._layers:
             if not layer.run_first:
@@ -332,16 +339,23 @@ class LiteEngine:
             try:
                 if not started.event.wait(timeout=_QUEUE_TIMEOUT_S):
                     logger.warning("Layer %s still queued after %.0fs, skipping", layer_name, _QUEUE_TIMEOUT_S)
+                    self._skip(layer_name)
                     continue
                 remaining = started.at + _LAYER_TIMEOUT_S - time.perf_counter()
                 result = future.result(timeout=max(remaining, 0.0))
                 layer_results.append(result)
             except FuturesTimeoutError:
                 logger.warning("Layer %s timed out, skipping", layer_name)
+                self._skip(layer_name)
             except Exception as e:
                 logger.warning("Layer %s failed: %s, skipping", layer_name, e)
+                self._skip(layer_name)
 
         return fuse_results(layer_results, self._config, total_start=start)
+
+    def _skip(self, layer_name: str) -> None:
+        with self._skipped_lock:
+            self._skipped[layer_name] += 1
 
     def _record_analytics(self, text: str, result: ShieldResult) -> None:
         """Record analysis result to analytics DB (non-blocking)."""
@@ -494,6 +508,12 @@ class LiteEngine:
     def active_layers(self) -> list[str]:
         """Return names of active layers."""
         return [layer.name for layer in self._layers]
+
+    @property
+    def skipped_layers(self) -> dict[str, int]:
+        """Layer runs skipped since this engine was built (timed out, still queued or crashed), by name."""
+        with self._skipped_lock:
+            return dict(self._skipped)
 
     @property
     def degraded_layers(self) -> list[str]:

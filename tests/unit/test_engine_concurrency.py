@@ -62,6 +62,7 @@ def test_queued_layers_are_not_skipped(slow_engine, caplog):
     # 6 calls x 2 layers x 0.3s on one worker: the last ones queue ~3.3s, past the 1s budget.
     assert "skipping" not in caplog.text
     assert all({lr.layer for lr in r.layer_results} == {"a", "b"} for r in results)
+    assert slow_engine.skipped_layers == {}
 
 
 def test_a_layer_slower_than_its_budget_is_still_skipped(monkeypatch, caplog):
@@ -71,7 +72,28 @@ def test_a_layer_slower_than_its_budget_is_still_skipped(monkeypatch, caplog):
     try:
         with caplog.at_level(logging.WARNING, logger="prompt_armor"):
             result = eng.analyze("hello")
+        skipped = eng.skipped_layers
     finally:
         eng.close()
     assert "Layer slow timed out, skipping" in caplog.text
     assert result.layer_results == ()
+    # Counted, so the benchmark and the fusion training dump can refuse the run.
+    assert skipped == {"slow": 1}
+
+
+class _CrashingLayer(_SlowLayer):
+    def analyze(self, text: str) -> LayerResult:
+        raise RuntimeError("boom")
+
+
+def test_crashed_layers_are_counted_as_skipped(monkeypatch):
+    layers = [_SlowLayer("ok", 0.0), _CrashingLayer("bad", 0.0)]
+    monkeypatch.setattr(engine_mod, "_build_layers", lambda config: layers)
+    eng = engine_mod.LiteEngine()
+    try:
+        eng.analyze("hello")
+        eng.analyze("world")
+        skipped = eng.skipped_layers
+    finally:
+        eng.close()
+    assert skipped == {"bad": 2}
